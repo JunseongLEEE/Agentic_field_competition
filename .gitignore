@@ -1,0 +1,29 @@
+# Competition data (too large for git)
+data/
+artifacts/*.pkl
+artifacts/*.npy
+artifacts/*.h5
+
+# Model weights
+experiments/*/models/
+experiments/*/model/
+experiments/*/*.npy
+
+# Wiki sessions (auto-generated, can be large)
+wiki/sessions/
+
+# Submissions
+submissions/*.zip
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store

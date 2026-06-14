@@ -1,0 +1,17 @@
+{
+  "last_updated": null,
+  "current_phase": "baseline",
+  "best_cv": 0.0,
+  "best_experiment": null,
+  "stall_counter": 0,
+  "total_cycles": 0,
+  "max_cycles": 20,
+  "strategy_history": [],
+  "next_action": "plan",
+  "active_experiments": [],
+  "blocked_approaches": [],
+  "recent_context_window": 5,
+  "last_reasoning": "",
+  "competition_metric": null,
+  "data_shape": null
+}
