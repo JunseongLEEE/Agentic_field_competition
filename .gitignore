@@ -1,5 +1,6 @@
 # Competition data (too large for git)
 data/
+Last_year_competition/open/*.csv
 artifacts/*.pkl
 artifacts/*.npy
 artifacts/*.h5
