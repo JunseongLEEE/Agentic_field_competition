@@ -1,5 +1,5 @@
 ---
-description: "Show competition dashboard — all experiments, scores, submission history, and current strategy at a glance."
+description: "Competition dashboard. One screen: time state, daily quota, best CV, best LB, CV→LB correlation health, top experiments, recommended next action."
 user-invocable: true
 allowed-tools:
   - Bash
@@ -9,55 +9,97 @@ allowed-tools:
 
 # /status — Competition Dashboard
 
-Show a complete overview of competition progress.
+A single screen that tells you: how much time left, how many submissions used today,
+what's the current best, how trustworthy CV is for predicting LB, and what to do next.
 
 ## Display
 
-### 0. Time State (deadlines + daily quota)
+### 0. Time State + Quota
 
-!`python scripts/check_time_state.py 2>/dev/null || echo "competition_meta.yaml not found"`
+!`python scripts/check_time_state.py 2>/dev/null || echo "competition_meta.yaml missing"`
 
-### 1. Experiment Summary
+### 1. CV→LB Correlation Health
 
-!`cat EXPERIMENT_LOG.csv 2>/dev/null || echo "No experiments yet"`
+!`python scripts/cv_lb_correlation.py 2>/dev/null || echo "correlation script missing"`
 
-Format as a clean table:
+### 2. Orchestrator State
+
+!`python -c "import json; s=json.load(open('logs/orchestrator_state.json')); print('phase=',s.get('current_phase'),' best_cv=',s.get('best_cv'),' best_lb=',s.get('best_lb'),' stall=',s.get('stall_counter'),'/5  cycles=',s.get('total_cycles'))" 2>/dev/null || echo "orchestrator_state.json missing"`
+
+### 3. Experiment Digest (top of file)
+
+!`head -40 logs/experiment_digest.md 2>/dev/null || echo "experiment_digest.md missing — run scripts/build_digest.py"`
+
+### 4. Recent Submissions
+
+!`python -c "
+import yaml, datetime
+m = yaml.safe_load(open('competition_meta.yaml'))
+log = m.get('submissions_log') or []
+print(f'total submissions: {len(log)}')
+for e in log[-5:]:
+    print(f\"  {e.get('submitted_at','?')[:10]}  {e.get('experiment_id','?'):<28}  cv={e.get('cv_score','?')}  lb={e.get('lb_score','?')}  status={e.get('status','?')}\")
+" 2>/dev/null || echo "no submissions logged"`
+
+### 5. Latest Insights (last 3)
+
+!`tail -n 3 logs/insights.jsonl 2>/dev/null | python -c "
+import json, sys
+for line in sys.stdin:
+    line = line.strip()
+    if not line: continue
+    r = json.loads(line)
+    print(f\"  {r.get('experiment','?'):<28}  gap={r.get('gap','?'):+.4f}  → {r.get('insight','')}\")
+" 2>/dev/null || echo "  no insights yet"`
+
+### 6. Recommended Next Action
+
+Compute from the above:
+- If `days_to_preliminary <= 1` and there is a CANDIDATE → `/rank` then manual submit.
+- Else if `stall_counter >= 5` → `/plan` in diagnostic mode (CV audit, leakage probes).
+- Else if `submissions_remaining_today > 0` AND `evaluation.json.recommendation == CANDIDATE` exists → `/rank`.
+- Else if any experiment is missing `evaluation.json` → `/eval <that exp>`.
+- Else if there is a packaged but unranked CANDIDATE → `/rank`.
+- Else → `/plan`.
+
+Print one line:
 ```
-EXPERIMENTS                          CV Score   Std      Status
-─────────────────────────────────────────────────────────────────
-exp_001_baseline_lgbm                0.8234     0.0045   COMPLETED
-exp_002_feature_eng_v1               0.8301     0.0038   CANDIDATE
-exp_003_catboost_tuned               0.8289     0.0051   EVALUATED
+NEXT: /<skill> [args]   ← <one sentence why>
 ```
 
-### 2. Best Scores
+### 7. Warnings
+
+Flag in red (text only — no color codes):
+- `submissions_today >= 9` → "quota almost exhausted"
+- `days_to_preliminary <= 2` → "deadline imminent — freeze new architectures"
+- `cv_lb_trust == 'low' and submissions_count >= 3` → "submissions aren't improving the correlation model; collect more diverse picks"
+- `best_lb is null and submissions_today >= 1` → "submitted but no LB recorded — run /submit-result"
+
+## Output Skeleton
 
 ```
-LEADERBOARD
-─────────────────────────────
-Best CV:     0.XXXX (exp_NNN)
-Best LB:     0.XXXX (exp_NNN)
-CV-LB Gap:   0.XXXX (avg)
+═════════════════════════════════════════════
+COMPETITION DASHBOARD — <YYYY-MM-DD HH:MM KST>
+═════════════════════════════════════════════
+Deadline       : preliminary 2026-07-15  → D-<N>
+Daily quota    : <used>/10  remaining=<R>
+
+Best CV        : 0.XXXX (exp_NNN)
+Best LB        : 0.XXXX (exp_NNN)
+CV→LB model    : n=<k>  r=<r>  σ=<sigma>  trust=<level>
+
+Recent experiments (top of digest):
+  ...
+
+Recent submissions:
+  ...
+
+Recent insights:
+  ...
+
+NEXT: /<skill> [args]   ← <reason>
+
+Warnings:
+  - ...
+═════════════════════════════════════════════
 ```
-
-### 3. Submission Status
-
-!`cat LEADERBOARD_LOG.md 2>/dev/null | tail -10`
-
-```
-TODAY'S SUBMISSIONS: X/10 used
-TOTAL SUBMISSIONS:   XX
-```
-
-### 4. Strategy Phase
-
-!`cat EXPERIMENT_GOAL.md 2>/dev/null | head -30`
-
-### 5. Quick Recommendations
-
-Based on current state, suggest:
-- What to try next (1-2 sentences)
-- Any warnings (CV-LB divergence, time running out, etc.)
-- Remaining competition days estimate
-
-End with: "다음 행동: `/plan` (계획) | `/dev NAME` (구현) | `/eda` (데이터 분석)"

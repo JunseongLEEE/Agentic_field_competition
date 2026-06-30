@@ -1,5 +1,5 @@
 ---
-description: "Implement an experiment — creates isolated experiment directory with training code AND DACON inference code. Pass experiment name or plan reference as argument."
+description: "Implement an experiment as TWO scripts: train.py (local CV) and script.py (DACON server inference). Self-contained, reproducible, offline-safe, T4-fittable."
 user-invocable: true
 allowed-tools:
   - Read
@@ -11,204 +11,256 @@ allowed-tools:
   - Agent
 ---
 
-# /dev — Model Developer (DACON Code Submission)
+# /dev — Model Developer
 
-You implement experiments for an AI competition. Each experiment produces TWO codebases:
-1. **train.py** — local training with CV (never submitted)
-2. **script.py** — server-side inference only (this gets submitted)
+You implement experiments for **14-class AI Agent Action Decision** (Macro-F1).
+Each experiment produces TWO scripts:
+- `train.py` — local training + 5-fold stratified CV (never submitted)
+- `script.py` — DACON server inference only (this is what goes into submit.zip)
 
 ## Arguments
-- `$ARGUMENTS` — experiment name or description (e.g., "baseline_lgbm", "transformer_small")
+- `$ARGUMENTS` — experiment id or plan reference (e.g., `exp_001_baseline_lgbm` or `plan_20260630_0900#exp_002`)
 
-## Step 0: Read Context (MANDATORY)
-
-코드 작성 전 반드시 읽기:
-1. `data_docs/*.md` — 데이터 스키마, 생성 방법, 도메인 노트
-2. `data_docs/references/*.md` — 참고된 오픈소스 정보 (전처리/모델링 hint)
-3. `wiki/lessons/` Grep으로 관련 모델/피처 검색 — 같은 실수 반복 방지
-4. `competition_meta.yaml` — 마감일 인식 (D-day 가까우면 simpler 코드 선호)
-
-이 정보 없이 train.py를 작성하면 잘못된 가정으로 시간을 낭비할 가능성 큼.
-
-## DACON Submission Format (MUST follow)
-
-The final submission zip structure:
-```
-submit.zip
-├── model/              # Trained model weights (saved by train.py)
-│   └── model.pt        # Or .pkl, .bin, .onnx, etc.
-├── script.py           # Inference ONLY (reads data/ → writes output/submission.csv)
-└── requirements.txt    # Extra packages beyond server defaults
-```
-
-**Critical constraints:**
-- script.py runs in **OFFLINE** environment — NO internet access
-- NO `from_pretrained("model-name")` from HuggingFace Hub
-- NO API calls (OpenAI, etc.)
-- ALL model files must be in `model/` directory
-- Output MUST go to `output/submission.csv`
-- Data is at `data/test.csv` (server provides this)
-
-## Experiment Directory Structure
-
-```
-experiments/exp_NNN_name/
-├── config.yaml          # All parameters
-├── train.py             # LOCAL training + CV (produces model weights)
-├── script.py            # INFERENCE ONLY (copy of what gets submitted)
-├── requirements.txt     # Extra packages for submission
-├── model/               # Saved model weights after training
-├── models/              # Per-fold models (for CV, not submitted)
-├── SUMMARY.md           # Experiment memory (from template)
-└── README.md            # Hypothesis, approach
-```
-
-## Step 1: Read Context
-
-Before implementing, read:
-```
-logs/experiment_digest.md    — what's been tried, what worked
-logs/insights.jsonl          — CV-LB patterns from past submissions
-Competition_desription.md    — competition theme
-```
-
-## Step 2: Create Experiment Directory
+## STEP 0 — Read Context (MANDATORY)
 
 ```bash
-python scripts/create_experiment.py --name "$0" --hypothesis "$ARGUMENTS"
+# Confirm the plan entry
+ls logs/plan_*.yaml | tail -1
+
+# Server limits
+cat competition_meta.yaml | head -60
+
+# Data documentation
+ls data_docs/ && cat data_docs/*.md
+ls data_docs/references/
+
+# Past lessons for this model family / feature set
+Grep -r "<model_family>" wiki/lessons/
+Grep -r "<feature_set>" wiki/lessons/
+
+# Current best
+cat logs/orchestrator_state.json | python -m json.tool
 ```
 
-Or create manually if script doesn't fit.
+Refuse to start coding if any of the following is missing or unreadable:
+- `data_docs/dataset_overview.md` (must have exact column names + class list)
+- The plan entry containing `hypothesis`, `verification_protocol`, `approach`
+- `competition_meta.yaml`
 
-## Step 3: Implement train.py
+## STEP 1 — Scaffold
 
-The training script MUST:
+```bash
+python scripts/create_experiment.py --name "$ARGUMENTS" --hypothesis "<from plan>"
+```
 
-1. **Load config.yaml** for all parameters
-2. **Set seeds** everywhere (numpy, random, torch, etc.)
-3. **Implement CV loop** (5-fold stratified by default)
-4. **Save outputs**:
-   - `oof_preds.npy` — out-of-fold predictions
-   - `test_preds.npy` — test predictions (mean of folds)
-   - `models/` — per-fold models (for CV analysis)
-   - `model/` — **final model for submission** (trained on all data or best fold)
-   - `train_log.json` — structured results
-5. **Measure inference speed**: time per sample on test data
-6. **Report model size**: total size of model/ directory in MB
-7. **Be runnable** with: `cd experiments/exp_NNN && python train.py`
+Directory layout:
+```
+experiments/exp_NNN_name/
+├── config.yaml          # All hyperparameters, seeds, CV strategy
+├── train.py             # Local CV (NEVER submitted)
+├── script.py            # Server inference (SUBMITTED)
+├── features.py          # Optional, if shared between train and script
+├── model.py             # Optional, custom model code
+├── requirements.txt     # Extras beyond DACON image (keep minimal)
+├── model/               # Final weights → submit.zip
+├── models/              # Per-fold weights → local CV only, NOT submitted
+├── SUMMARY.md           # Memory card (autogenerated)
+└── README.md            # Hypothesis + verification protocol
+```
 
-### train_log.json Format (MUST follow)
+## STEP 2 — config.yaml
 
+```yaml
+experiment:
+  id: exp_NNN_name
+  hypothesis: "<from plan>"
+  expected_macro_f1: 0.XX
+  verification_protocol:
+    accept_if: "..."
+    reject_if: "..."
+  created: <ISO date>
+  git_commit: <commit short hash>
+
+data:
+  train_path: ../../data/train.csv
+  test_path: ../../data/test.csv
+  sample_submission_path: ../../data/sample_submission.csv
+  target_col: <from data_docs/dataset_overview.md>
+  text_cols: [current_prompt]
+  history_col: history
+  meta_cols: [<session_meta columns>]
+
+cv:
+  n_splits: 5
+  strategy: stratified                # stratified by 14-class target
+  seed: 42
+
+model:
+  type: lightgbm                      # lightgbm | xgboost | catboost | mlp | distil_bert_ko
+  num_class: 14
+  objective: multiclass
+  params: {}
+  class_weight: balanced              # critical for Macro-F1 with imbalance
+
+features:
+  tfidf:
+    max_features: 50000
+    ngram_range: [1, 2]
+  history_encoding: last_k_actions    # last_k_actions | ngram | embedding
+  history_k: 5
+
+output:
+  oof_predictions: oof_preds.npy      # shape (N, 14) float32
+  test_predictions: test_preds.npy    # shape (M, 14) float32
+  weights_dir: model/                 # final retrained-on-full weights
+  per_fold_dir: models/               # per-fold weights for diagnostics
+  log_file: train_log.json
+```
+
+## STEP 3 — Implement train.py
+
+Required behavior:
+1. Load `config.yaml` (no hardcoded params).
+2. Set seeds: `numpy`, `random`, `torch` if used, `os.environ['PYTHONHASHSEED']`.
+3. Run 5-fold `StratifiedKFold(n_splits=5, shuffle=True, random_state=cv.seed)` on the 14-class target.
+4. Per fold: fit, predict OOF probabilities (shape `(n_fold_val, 14)`).
+5. Compute `f1_score(y, oof_preds.argmax(axis=1), average='macro')` per fold AND aggregate.
+6. Compute per-class F1 on aggregated OOF predictions.
+7. After CV: retrain on full train, save final weights to `model/`.
+8. Predict test → save `test_preds.npy` (avg of folds OR final retrain — declare which in config).
+9. Time the inference: `inference_ms_per_sample` on a 1000-row sample.
+10. Measure `model_size_mb` = `du -sb model/`.
+11. Run `scripts/validate_submission.py` against `script.py` for early offline check.
+12. Write `train_log.json`.
+
+Required `train_log.json` schema:
 ```json
 {
   "experiment_id": "exp_NNN_name",
-  "cv_scores": [0.XX, 0.XX, 0.XX, 0.XX, 0.XX],
+  "metric": "macro_f1",
+  "cv_fold_scores": [0.XX, 0.XX, 0.XX, 0.XX, 0.XX],
   "cv_mean": 0.XXXX,
   "cv_std": 0.XXXX,
-  "metric_name": "auc or f1 or rmse etc",
-  "runtime_seconds": 123.4,
+  "per_class_f1": {"0": 0.XX, "1": 0.XX, "...": "..."},
+  "worst_class": {"id": <int>, "f1": 0.XX},
+  "best_class":  {"id": <int>, "f1": 0.XX},
+  "collapsed_classes": [<class_ids with F1 < 0.05>],
+  "runtime_seconds_train": 123.4,
   "inference_ms_per_sample": 2.5,
+  "estimated_full_test_minutes": 1.8,
   "model_size_mb": 150.0,
   "n_features": 50,
-  "feature_importance": {"feat1": 0.1, "feat2": 0.05},
-  "offline_compatible": true
+  "feature_importance_top10": {"feat1": 0.1, "feat2": 0.05},
+  "offline_compatible": true,
+  "seed": 42,
+  "git_commit": "abc1234"
 }
 ```
 
-## Step 4: Implement script.py (INFERENCE ONLY)
+## STEP 4 — Implement script.py (INFERENCE ONLY)
 
-This is what runs on DACON server. Template:
+Strict rules:
+- Single entrypoint guarded by `if __name__ == '__main__':`.
+- Reads only from `data/` (relative path, server-mounted, read-only).
+- Loads weights only via local relative paths inside `model/`.
+- Writes to `output/submission.csv` (exact filename, exact `output/` directory).
+- No `from_pretrained("hub/name")`, no `requests`, no `urllib`, no `wget`, no `curl`.
+- No training, no fitting, no scaler/encoder fitting — load fitted artifacts from `model/`.
+- Inference time ≤ 10 minutes on T4 (3 vCPU, 12GB RAM).
 
+Skeleton:
 ```python
 import os
 import pandas as pd
-# Other OFFLINE-compatible imports only
+# Only offline-safe imports
 
-def load_model():
-    """Load trained model from model/ directory."""
-    model_path = os.path.join('model', 'your_model_file')
-    # Load model — LOCAL FILES ONLY, no internet
-    return model
+MODEL_DIR = 'model'
+DATA_PATH = os.path.join('data', 'test.csv')
+SAMPLE_SUB_PATH = os.path.join('data', 'sample_submission.csv')
+OUTPUT_PATH = os.path.join('output', 'submission.csv')
 
-def load_data():
-    """Load test data from data/ directory (provided by server)."""
-    data_path = os.path.join('data', 'test.csv')
-    data = pd.read_csv(data_path)
-    return data
 
-def preprocess(data):
-    """Apply same preprocessing as training."""
-    # MUST match train.py preprocessing exactly
-    return processed_data
+def load_artifacts():
+    # e.g. tfidf vectorizer, fitted encoders, model
+    ...
 
-def predict(model, data):
-    """Run inference."""
-    predictions = model.predict(data)
-    return predictions
 
-def save_results(predictions):
-    """Save to output/submission.csv."""
+def preprocess(df, artifacts):
+    # MUST mirror train.py preprocessing exactly
+    ...
+
+
+def predict(features, artifacts):
+    proba = artifacts['model'].predict_proba(features)  # (M, 14)
+    return proba.argmax(axis=1)
+
+
+def write_submission(test_df, preds):
     os.makedirs('output', exist_ok=True)
-    # Format must match sample_submission.csv
-    submission = pd.DataFrame({
-        'ID': ...,          # Match sample_submission format
-        'target': predictions
-    })
-    submission.to_csv(os.path.join('output', 'submission.csv'), index=False)
+    sample = pd.read_csv(SAMPLE_SUB_PATH)
+    out = sample.copy()
+    out.iloc[:, 1] = preds                              # second column is the label
+    out.to_csv(OUTPUT_PATH, index=False)
+
 
 if __name__ == '__main__':
-    model = load_model()
-    data = load_data()
-    processed = preprocess(data)
-    predictions = predict(model, processed)
-    save_results(predictions)
-    print("추론 완료!")
+    artifacts = load_artifacts()
+    test_df = pd.read_csv(DATA_PATH)
+    features = preprocess(test_df, artifacts)
+    preds = predict(features, artifacts)
+    write_submission(test_df, preds)
+    print('inference done')
 ```
 
-### script.py Rules
-- **NO training code** — inference only
-- **NO internet calls** — everything local
-- **NO `from_pretrained()` with model names** — use local paths only
-- Reads from `data/` (server provides)
-- Writes to `output/submission.csv`
-- Must handle edge cases (missing values, unexpected data)
-- Must be fast — inference speed is evaluated
+## STEP 5 — requirements.txt
 
-## Step 5: Create requirements.txt
+- List ONLY packages the DACON image lacks.
+- Pin exact versions for reproducibility.
+- Avoid heavy installs (CUDA torch builds, transformers full) unless absolutely required — they risk the 10-minute install budget.
 
-Only include packages NOT already on DACON server:
-```txt
-# Only extra packages needed for inference
-# Do NOT include: pandas, numpy, scikit-learn, torch (usually pre-installed)
-lightgbm==4.3.0
-```
+## STEP 6 — SUMMARY.md
 
-## Step 6: Create SUMMARY.md
+Generate from template, fill:
+- Hypothesis + verification protocol (copied from plan)
+- Setup (data, cv, model)
+- Inference constraints (model_size_mb estimate, ms/sample target)
+- Results section left empty (filled by `/run`)
 
-Copy from `experiments/TEMPLATE_SUMMARY.md` and fill in Setup + Inference Constraints sections.
+## STEP 7 — Self-Check Before Returning Control
 
-## Step 7: Verify Offline Compatibility
-
-Scan script.py for violations:
+Run and report:
 ```bash
-# These patterns should NOT appear in script.py:
-grep -n "from_pretrained\|download\|api_key\|requests.get\|urllib\|wget\|curl" script.py
+# Offline scan
+python scripts/validate_submission.py --script experiments/exp_NNN/script.py
+
+# Structural check
+test -f experiments/exp_NNN/config.yaml
+test -f experiments/exp_NNN/train.py
+test -f experiments/exp_NNN/script.py
+test -f experiments/exp_NNN/requirements.txt
+
+# Syntax check
+python -m py_compile experiments/exp_NNN/train.py experiments/exp_NNN/script.py
 ```
 
-## After Implementation
-
+Output:
 ```
 Experiment: exp_NNN_name
-Files created:
-  ✓ config.yaml
-  ✓ train.py       (training + CV)
-  ✓ script.py      (inference only — DACON submission)
-  ✓ requirements.txt
-  ✓ SUMMARY.md
-  ✓ model/         (empty — populated after training)
+  config.yaml      ✓
+  train.py         ✓ (compiles)
+  script.py        ✓ (compiles, offline check PASS)
+  requirements.txt ✓
+  SUMMARY.md       ✓
+  model/           empty — populated by /run
 
-Offline check: PASS/FAIL
-Ready to run: /run exp_NNN_name
+Next: /run exp_NNN_name
 ```
 
-Do NOT run the experiment — that's `/run`'s job.
+## Hard Rules
+
+- DO NOT execute the experiment — `/run` does that.
+- DO NOT skip the offline scan.
+- DO NOT use random KFold — use StratifiedKFold on the 14-class target.
+- DO NOT fit any transformer in `script.py`. All preprocessing artifacts must come from `model/`.
+- DO NOT load weights via absolute paths.
+- DO NOT exceed 800MB in `model/` (leave ≥200MB headroom under the 1GB zip cap).

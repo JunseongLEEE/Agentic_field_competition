@@ -1,5 +1,5 @@
 ---
-description: "Experiment orchestrator — analyzes current progress, plans next experiments with dependencies and priorities. Use when starting a session, after reviewing results, or when deciding what to try next."
+description: "Experiment orchestrator. Produces a structured wave plan where every experiment has a falsifiable Macro-F1 hypothesis, an expected delta, and a verification protocol. Respects daily submission quota and days-to-deadline."
 user-invocable: true
 allowed-tools:
   - Read
@@ -13,109 +13,180 @@ allowed-tools:
 
 # /plan — Experiment Orchestrator
 
-You are the experiment planning orchestrator for an AI competition (SW중심대학협의회, 2-week timeline, max 10 submissions/day).
+You are the planning orchestrator for **DACON SW중심대학협의회 — AI Agent Action Decision** (14-class Macro-F1).
+Your job: turn the current state into the next wave of experiments that maximize expected Macro-F1 gain per unit of time, without wasting DACON submission quota.
 
-## Context
-
-**This year's competition**: AI Agent Action Decision prediction — lightweight, fast decision-making AI model under resource constraints.
-
-!`python scripts/check_time_state.py 2>/dev/null || echo "time state check failed"`
-
-!`cat EXPERIMENT_GOAL.md 2>/dev/null || echo "EXPERIMENT_GOAL.md not found"`
-
-!`cat EXPERIMENT_LOG.csv 2>/dev/null || echo "No experiments yet"`
-
-!`cat LEADERBOARD_LOG.md 2>/dev/null || echo "No LB entries yet"`
-
-!`ls data_docs/ 2>/dev/null && echo "→ read data_docs/ before planning" || echo "no data_docs yet"`
-
-## Step 0: Wiki Search (ALWAYS do this first)
-
-계획을 세우기 전에 반드시 과거 지식을 검색한다:
-
-1. `wiki/decisions/` — 과거 어떤 결정을 했고 왜 했는지
-2. `wiki/lessons/` — 어떤 실수를 했고 어떤 교훈을 얻었는지
-3. `wiki/context/` — 최근 프로젝트 상태 스냅샷
-
-검색 방법:
-- `Grep`으로 현재 고려 중인 모델/기법 관련 키워드 검색
-- 관련 페이지가 있으면 요약해서 plan에 반영
-- 과거 lesson이 있으면 같은 실수를 반복하지 않도록 계획에 명시
+## Core Loop (autonomous: hypothesis → verify → export)
 
 ```
-[WIKI CONTEXT]
-- 관련 결정: [[decision-id]] — 요약
-- 관련 교훈: [[lesson-id]] — 요약
-- 또는 "관련 wiki 항목 없음"
+HYPOTHESIZE   — propose falsifiable claims about Macro-F1
+VERIFY        — design CV protocol that decides accept/reject WITHOUT a DACON submission
+EXPORT        — write the plan YAML; downstream skills (/dev, /run, /eval) execute it
 ```
 
-## Your Job
+## STEP 0 — Read Required Inputs (do not skip)
 
-1. **Search wiki**: 과거 결정/교훈 검색 (Step 0)
-2. **Assess current state**: What phase are we in? What worked? What failed?
-3. **Identify gaps**: What hasn't been tried? Where is the most upside?
-4. **Propose 2-4 experiments** with:
-   - Clear hypothesis (what will we learn?)
-   - Dependencies (what must finish first?)
-   - Priority (HIGH/MEDIUM/LOW)
-   - Expected impact
-   - Execution wave assignment (parallel where possible)
+```bash
+python scripts/check_time_state.py --json
+python scripts/cv_lb_correlation.py --json
+```
 
-## Output Format
+Then read:
+1. `competition_meta.yaml` — confirm `metric: macro_f1`, `num_classes: 14`, server limits, `submissions_log`.
+2. `logs/orchestrator_state.json` — `current_phase`, `best_cv`, `best_experiment`, `stall_counter`, `blocked_approaches`.
+3. `logs/experiment_digest.md` — full experiment table.
+4. `logs/insights.jsonl` (last 10) — CV-LB gaps, class-collapse patterns, model-family generalization track record.
+5. `data_docs/*.md` — schema, generation methodology, opensource references, domain notes.
+6. `EXPERIMENT_GOAL.md` — hypotheses backlog and strategy phases.
+7. `Grep -r "<topic>" wiki/lessons/ wiki/decisions/` for any approach already tried and dropped (avoid repeating mistakes).
+
+## STEP 1 — Phase Resolution
+
+Derive `phase` from `days_to_preliminary` returned by Step 0:
+
+| days_left | phase |
+|---|---|
+| ≥ 12 | baseline |
+| 7–11 | feature_eng |
+| 4–6 | model_exploration |
+| 2–3 | ensemble |
+| ≤ 1 | final |
+
+Override: if `stall_counter >= 5`, force `phase = diagnostic` regardless of days. Diagnostic phase contains only experiments that probe CV setup, leakage, or class collapse — never new model families.
+
+## STEP 2 — Hypothesis Generation
+
+Combine three sources, dedupe against `blocked_approaches`:
+- `EXPERIMENT_GOAL.md` "Hypotheses Backlog" rows with `Status: PLANNED`.
+- Gaps identified in `data_docs/domain_notes.md` (e.g., "class 9 only appears in low-token sessions → try meta features").
+- Failure modes from `logs/insights.jsonl` (e.g., "all CatBoost runs collapse class 12 → try focal loss").
+
+For each hypothesis write:
+- A single declarative sentence stating the expected effect on **Macro-F1** (NOT accuracy).
+- The mechanism (why it should help).
+- The CV signal that would confirm or reject it.
+
+Example:
+> "Adding `last_3_actions` as ordinal features will raise CV Macro-F1 by ≥ +0.02 by improving F1 on action classes 3, 7, and 11. Reject if any of {3, 7, 11} F1 drops vs baseline."
+
+## STEP 3 — Information Gain Ranking
+
+Score each hypothesis:
+
+```
+score = expected_macro_f1_delta
+      * confidence_prior          # 0..1, from past similar experiments
+      / estimated_runtime_minutes # local train.py wall-clock
+```
+
+`confidence_prior` rubric:
+- 0.8–1.0: variant of an experiment that already improved CV.
+- 0.4–0.7: novel but informed by an existing lesson/decision.
+- 0.1–0.3: speculative / no prior evidence.
+
+## STEP 4 — Diversity & Risk Budget
+
+Enforce in the final wave:
+- ≥ 2 model families OR ≥ 2 feature-set families per wave.
+- ≤ 1 "risky" experiment (`expected_macro_f1_delta > 0.05` OR novel architecture).
+- ≥ 1 "safe" experiment (incremental change on top of `best_experiment`).
+- Wave size ≤ 5.
+
+## STEP 5 — Quota & Submission Policy
+
+Read `cv_lb_correlation` from Step 0:
+- `trust_level == "high"` → submission_policy uses predicted LB.
+- `trust_level == "medium"` → submission_policy uses predicted LB with widened uncertainty (×1.5).
+- `trust_level == "low"` → do not gate; use raw CV but require ≥0.005 CV improvement to submit.
+
+Embed in the plan:
+```yaml
+submission_policy:
+  do_not_submit_unless: "predicted_lb - uncertainty > current_best_lb"
+  min_cv_improvement_if_trust_low: 0.005
+```
+
+## STEP 6 — Export Plan
+
+Write to `logs/plan_YYYYMMDD_HHMM.yaml`:
 
 ```yaml
-plan_date: YYYY-MM-DD
-strategy_phase: baseline|feature_eng|model_exploration|ensemble|final
-current_best_cv: X.XXXX
+plan_id: plan_YYYYMMDD_HHMM
+created: <ISO timestamp>
+time_state:
+  days_to_preliminary: <int>
+  submissions_today: <int>
+  submissions_remaining_today: <int>
+phase: baseline | feature_eng | model_exploration | ensemble | final | diagnostic
+cv_lb_correlation:
+  trust_level: low | medium | high
+  current_best_cv: <float>
+  current_best_lb: <float | null>
+
+wiki_consulted:
+  - wiki/lessons/<id>
+  - wiki/decisions/<id>
 
 experiments:
   - id: exp_NNN_short_name
-    hypothesis: "..."
+    hypothesis: "<one falsifiable sentence about Macro-F1>"
+    mechanism: "<why it should help>"
+    rationale: "<reference to data_docs / prior insight>"
+    expected_macro_f1_delta: "+0.0X"
+    confidence_prior: 0.0..1.0
+    risk: safe | moderate | risky
+    target_classes: all | minority | [class_ids]
+    approach:
+      model_family: lightgbm | xgboost | catboost | mlp | distil_bert_ko | other
+      feature_set: <short tag>
+      cv: stratified_5fold
+    verification_protocol:
+      accept_if: "cv_macro_f1 > <baseline_macro_f1> + <delta> AND min_per_class_f1 > <threshold>"
+      reject_if: "cv_std > 0.02 OR any class F1 < 0.05"
     depends_on: []
-    priority: HIGH
-    approach: "..."
-    wave: 1
+    priority: HIGH | MEDIUM | LOW
+    estimated_runtime_minutes: <int>
+    score: <info_gain_score>
 
-execution_order:
-  wave_1: [parallel experiments]
-  wave_2: [depends on wave_1]
+execution_waves:
+  - wave_1: [exp_ids with no dependencies, sorted by score DESC]
+  - wave_2: [exp_ids depending on wave_1]
+
+submission_policy:
+  do_not_submit_unless: "predicted_lb - uncertainty > current_best_lb"
+  min_cv_improvement_if_trust_low: 0.005
 ```
 
-After presenting the plan, ask: "이 계획으로 진행할까요? 수정할 부분이 있으면 말씀해주세요."
+## STEP 7 — User Summary
 
-## Decision Rules
+Print a one-screen summary:
 
-### Time-pressure rules (from check_time_state.py)
-- **D-7 이상**: 자유 탐색 — 새 모델/피처 시도 가능
-- **D-3 ~ D-7**: 검증된 방향만 확장. 새 아키텍처는 강한 가설 있을 때만
-- **D-1 ~ D-3**: 안정화 단계. seed ensemble, stability check, 작은 튜닝만
-- **D-day**: 새 코드 작성 금지. 이미 검증된 candidate 중 선택만
+```
+PLAN plan_YYYYMMDD_HHMM
+─────────────────────────────────────────
+Phase           : <phase>
+Days to D-day   : <N>      Quota today: <used>/10
+Best CV         : <0.XXXX> | Best LB: <0.XXXX or n/a>
+CV→LB trust     : <low|medium|high>
 
-### Daily quota rules
-- 오늘 quota 8/10 이상 사용 시: 새 실험 멈추고 기존 candidate 평가 우선
-- quota가 1~2개만 남으면: 가장 자신있는 candidate 1개만 제출, diversity 포기
+Wave 1 (parallel):
+  1. exp_NNN_xxx      score=<f>  risk=<r>   exp_delta=+0.0X
+  2. exp_NNN_yyy      score=<f>  risk=<r>   exp_delta=+0.0X
 
-### Phase rules (relative to phase, not absolute days)
-- Phase "baseline": LightGBM/XGBoost/CatBoost로 CV setup 확립
-- Phase "feature_eng": 피처 엔지니어링 위주
-- Phase "model_exploration": 다양한 모델 패밀리 시도
-- Phase "ensemble": 다양성 있는 blending
-- Phase "final": stability + final candidate 선정
+Wave 2 (after wave 1):
+  3. exp_NNN_zzz      depends on exp_NNN_xxx
 
-### General
-- Never plan more than 4 experiments at once.
-- Always include 1 "safe" incremental improvement.
-- If CV-LB gap is growing, prioritize debugging CV setup over new models.
-- Consider inference speed — this competition values lightweight models.
+Submission policy: <do_not_submit_unless rule>
+Plan written to : logs/plan_YYYYMMDD_HHMM.yaml
+Next            : /dev exp_NNN_xxx
+─────────────────────────────────────────
+```
 
-## Competition-Specific Considerations
+## Hard Rules
 
-Based on last year's competition:
-- Data will likely be CSV-based with train/test split
-- Evaluation metric will be announced with data
-- Class imbalance is possible — prepare for it
-- Korean text data is likely
-- The theme emphasizes **speed + accuracy** under resource constraints
-- Look for allowed data leakage patterns (like last year's within-document cross-reference)
-
-After creating the plan, update EXPERIMENT_GOAL.md with any new hypotheses.
+- NEVER plan an experiment in `blocked_approaches`.
+- NEVER skip the wiki search step.
+- NEVER plan more than 5 experiments in a single wave.
+- NEVER recommend a submission — that is `/rank`'s job.
+- If `stall_counter >= 5`: plan must include at least one diagnostic experiment and zero risky bets.
+- Every experiment must declare its `verification_protocol` — no submission required to decide accept/reject.

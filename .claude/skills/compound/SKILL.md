@@ -1,74 +1,123 @@
-현재 세션의 결정/교훈/컨텍스트를 LLM Wiki에 compound한다.
+---
+description: "Compound knowledge from this session into the LLM Wiki. Extracts decisions, lessons, entities, and context; updates bridge files and digest. Run before ending a session."
+user-invocable: true
+allowed-tools:
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
+  - Bash
+---
 
-세션 종료 전 반드시 실행하여 지식을 축적한다.
+# /compound — Knowledge Capture
 
-## Step 1: 추출
+Turn this session's discoveries into durable wiki entries and refresh bridge files.
+Run before closing the session, and at the end of every `/auto` run.
 
-이 세션에서 발생한 것을 분류:
+## STEP 1 — Classify
 
-### Decisions (결정)
-- 내가 명시적으로 선택한 것
-- 대안 + 선택 이유 + 트레이드오프 포함
+Sort everything that happened this session into four buckets:
 
-### Lessons (교훈)
-- 실수했거나 잘못 알고 있었던 것
-- 증상 → 원인 → 수정 → 일반화
+| bucket | trigger | location |
+|---|---|---|
+| Decision | I deliberately picked one option over alternatives | `wiki/decisions/` |
+| Lesson   | I made a mistake or discovered a wrong assumption | `wiki/lessons/` |
+| Entity   | a new concept/tool/model/dataset/metric was introduced | `wiki/entities/` |
+| Context  | the project state changed in a way another agent must know | `wiki/context/` |
 
-### Context (컨텍스트)
-- 이 프로젝트/도메인에 대해 새로 알게 된 사실
-- best CV, LB score 등 핵심 수치 변화
+For each entry, capture:
+- exact numbers (CV, gap, model_size_mb, runtime)
+- exact file paths and experiment ids
+- date (ISO)
 
-### Entities (개념)
-- 처음 등장한 개념/도구/시스템/모델
+## STEP 2 — Dedupe Against Existing Wiki
 
-## Step 2: 중복 검색
+For each new entry, `Grep -ri "<keyword>" wiki/`. If a page already covers the same concept:
+- **append** a dated section to that page (do NOT create a duplicate)
+- update its `updated:` frontmatter
 
-각 항목에 대해 `wiki/` 디렉토리에서 Grep으로 이미 관련 페이지가 있는지 확인.
-- 있으면 → 해당 페이지에 append (`updated` 날짜 갱신)
-- 없으면 → 새 페이지 생성
+For decisions that conflict with a prior decision, add a `## Conflict <YYYY-MM-DD>` section per `wiki/_meta/conventions.md`.
 
-## Step 3: 쓰기
+## STEP 3 — Write Pages
 
-`wiki/_meta/conventions.md`의 규약을 그대로 따라 마크다운 작성.
+Follow `wiki/_meta/conventions.md` exactly. Required frontmatter for every page:
 
-### 파일 위치:
-- Decisions → `wiki/decisions/<kebab-case-id>.md`
-- Lessons → `wiki/lessons/<kebab-case-id>.md`
-- Entities → `wiki/entities/<kebab-case-id>.md`
-- Context → `wiki/context/<kebab-case-id>.md`
-- Session log → `wiki/sessions/session-<YYYY-MM-DD>-<NNN>.md`
-
-### 필수사항:
-- 모든 페이지에 frontmatter 포함 (conventions.md 참조)
-- 모든 페이지 끝에 `related: [[...]]` 양방향 링크 추가
-- 구체적 수치/파일 경로/실험 ID 포함 (모호한 표현 금지)
-
-## Step 4: 인덱스 갱신
-
-`wiki/_meta/index.md`의 해당 섹션에 새로 추가/수정된 페이지 목록 업데이트.
-
-형식:
+```yaml
+---
+id: <kebab-case-slug>
+type: entity | decision | lesson | context | session
+created: <ISO date>
+updated: <ISO date>
+tags: [topic1, topic2]
+related: [[other-page-id]]
+summary: <one-line summary>
+---
 ```
-- [[page-id]] — 한 줄 요약 (YYYY-MM-DD)
+
+Page bodies by type:
+- **entity**: `## Definition / ## Why it matters / ## Related / ## History`
+- **decision**: `## Context / ## Decision / ## Consequences` (ADR format)
+- **lesson**: `## Symptom / ## Root cause / ## Fix / ## Generalization`
+- **context**: free-form project snapshot
+- **session**: auto-generated compound source
+
+File locations:
+- decisions → `wiki/decisions/<id>.md`
+- lessons → `wiki/lessons/<id>.md`
+- entities → `wiki/entities/<id>.md`
+- context → `wiki/context/<id>.md`
+- session log → `wiki/sessions/session-<YYYY-MM-DD>-<NNN>.md`
+
+## STEP 4 — Update wiki/_meta/index.md
+
+Add a single line per new/updated page:
+```
+- [[page-id]] — one-line summary (YYYY-MM-DD)
+```
+Place under the right section header (Decisions / Lessons / Entities / Context).
+
+## STEP 5 — Refresh Bridge Files
+
+1. `logs/orchestrator_state.json` — `best_cv`, `best_lb`, `current_phase`, `stall_counter`, `last_reasoning`, `last_updated`.
+2. `python scripts/build_digest.py` — refresh `logs/experiment_digest.md`.
+3. `logs/insights.jsonl` — append any new CV→LB insight (usually `/submit-result` already wrote this, but double-check).
+
+## STEP 6 — Light vs Full Mode
+
+- **Full compound** (default, end-of-session): walk through all four buckets, write all pages, refresh all bridge files.
+- **Light compound** (each `/auto` cycle): only write lesson/decision pages when something noteworthy happened (CV improvement, failure, surprising LB result). Update orchestrator_state + cycle_history. Skip the rest.
+
+Choose mode based on argument:
+- `/compound` → full
+- `/compound light` → light
+
+## STEP 7 — Report
+
+```
+═════════════════════════════════════════════
+COMPOUND — <mode> mode — <YYYY-MM-DD HH:MM>
+═════════════════════════════════════════════
+Pages created  : <N>
+Pages updated  : <M>
+Conflicts      : <K>
+Bridge files   : orchestrator_state ✓ | digest ✓ | insights ✓
+
+New decisions:
+  - [[<id>]] — <summary>
+New lessons:
+  - [[<id>]] — <summary>
+New entities:
+  - [[<id>]] — <summary>
+
+Wiki state: <X> pages total (entities <a>, decisions <b>, lessons <c>, context <d>, sessions <e>)
+═════════════════════════════════════════════
 ```
 
-## Step 5: Bridge Files 갱신
+## Hard Rules
 
-다음 bridge files도 업데이트:
-1. `logs/orchestrator_state.json` — best_cv, current_phase 등 갱신
-2. `logs/experiment_digest.md` — 새 실험이 있었다면 갱신
-3. `logs/insights.jsonl` — 새 insight가 있었다면 추가
-
-## Step 6: 리포트
-
-사용자에게 다음 형식으로 보고:
-
-```
-📝 Compound 완료
-─────────────────
-추가된 페이지: N개
-업데이트된 페이지: M개
-발견된 충돌: K개
-─────────────────
-[상세 목록]
-```
+- ALWAYS dedupe before writing a new page.
+- ALWAYS include exact numbers; vague entries are worse than no entry.
+- ALWAYS write bidirectional `related: [[...]]` links — index follows the graph.
+- NEVER create wiki pages without frontmatter.
+- NEVER overwrite existing pages without appending a dated section first.

@@ -1,5 +1,5 @@
 ---
-description: "Quick EDA on competition data — analyzes shape, distributions, missing values, class balance, and key patterns. Run at competition start or when new data arrives."
+description: "Structured EDA for the 14-class AI Agent Action Decision dataset. Reads data_docs first, then probes schema, class balance, history, session_meta, and class-level signal. Appends findings to data_docs/domain_notes.md."
 user-invocable: true
 allowed-tools:
   - Bash
@@ -10,121 +10,159 @@ allowed-tools:
 
 # /eda — Exploratory Data Analysis
 
-Fast, structured EDA for competition data. Designed to extract actionable insights quickly.
+Goal: in one pass, surface the facts that change planning decisions.
+Output is appended (never overwritten) to `data_docs/domain_notes.md` and a one-shot snapshot to `logs/eda_report.md`.
 
 ## Arguments
-- `$ARGUMENTS` — optional: specific focus area (e.g., "target distribution", "text lengths", "missing values")
+- `$ARGUMENTS` — optional focus area (`target_distribution`, `history`, `session_meta`, `text_length`, `leakage_probe`).
 
-## Step 0: Read Data Documentation
-
-EDA를 시작하기 전 `data_docs/`를 모두 읽는다. 데이터셋이 어떻게 만들어졌는지를 알면 EDA에서 무엇을 봐야 할지가 명확해진다.
+## STEP 0 — Read data_docs/ FIRST
 
 ```bash
-ls data_docs/ 2>/dev/null && cat data_docs/*.md
+ls data_docs/ 2>/dev/null
+cat data_docs/dataset_overview.md       # exact column names, dtypes
+cat data_docs/generation_methodology.md # how the data was constructed
+cat data_docs/domain_notes.md           # prior EDA findings (do not duplicate)
+ls data_docs/references/
 ```
 
-특히 확인할 것:
-- `generation_methodology.md` — 데이터가 어떻게 만들어졌나
-- `references/` — 어떤 오픈소스를 참고했나
-- `domain_notes.md` — 이전 EDA에서 발견된 패턴
+You must know the column names and the dataset construction process before profiling the data.
 
-EDA 결과는 `domain_notes.md`에 누적 기록 (덮어쓰기 금지, append).
-
-## Step 1: Data Overview
+## STEP 1 — Schema and Shape
 
 ```python
-import pandas as pd
-import numpy as np
-
+import pandas as pd, numpy as np
 train = pd.read_csv('data/train.csv')
-test = pd.read_csv('data/test.csv')
+test  = pd.read_csv('data/test.csv')
+sample = pd.read_csv('data/sample_submission.csv')
 
-print("=== SHAPES ===")
-print(f"Train: {train.shape}, Test: {test.shape}")
+print("SHAPES")
+print(f"  train: {train.shape}")
+print(f"  test : {test.shape}")
+print(f"  sample_submission: {sample.shape}")
 
-print("\n=== COLUMNS ===")
-print(f"Train: {list(train.columns)}")
-print(f"Test: {list(test.columns)}")
-print(f"Train-only: {set(train.columns) - set(test.columns)}")  # likely includes target
+print("\nCOLUMNS")
+print(f"  train: {list(train.columns)}")
+print(f"  test : {list(test.columns)}")
+print(f"  train-only (likely target + leakage candidates): {sorted(set(train.columns) - set(test.columns))}")
 
-print("\n=== DTYPES ===")
+print("\nDTYPES")
 print(train.dtypes)
 
-print("\n=== MISSING VALUES ===")
-print(train.isnull().sum())
-print(test.isnull().sum())
-
-print("\n=== TARGET DISTRIBUTION ===")
-target_col = (set(train.columns) - set(test.columns)).pop()  # guess target
-print(train[target_col].value_counts(normalize=True))
+print("\nMISSING (train)")
+print(train.isnull().sum().sort_values(ascending=False).head(10))
+print("\nMISSING (test)")
+print(test.isnull().sum().sort_values(ascending=False).head(10))
 ```
 
-## Step 2: Feature Analysis
+## STEP 2 — 14-Class Target Distribution (Macro-F1 critical)
 
 ```python
-print("\n=== NUMERIC FEATURES ===")
-print(train.describe())
-
-print("\n=== CATEGORICAL FEATURES ===")
-for col in train.select_dtypes(include='object').columns:
-    print(f"\n{col}: {train[col].nunique()} unique values")
-    print(train[col].value_counts().head(5))
-
-print("\n=== TEXT FEATURES ===")
-for col in train.select_dtypes(include='object').columns:
-    lengths = train[col].str.len()
-    print(f"\n{col} length: mean={lengths.mean():.0f}, median={lengths.median():.0f}, max={lengths.max()}")
+target = '<from data_docs/dataset_overview.md>'
+vc = train[target].value_counts(normalize=True).sort_index()
+print("CLASS DISTRIBUTION")
+print(vc)
+print(f"\nimbalance ratio (max/min): {vc.max() / max(vc.min(), 1e-9):.2f}")
+print(f"smallest classes (top-3 minority):")
+print(vc.sort_values().head(3))
 ```
 
-## Step 3: Train-Test Consistency
+Flag in report if:
+- any class < 1% of train → Macro-F1 fragile; focal loss / class_weight critical
+- imbalance ratio > 50 → consider SMOTE / weighted sampling experiment
+
+## STEP 3 — Input Field Analysis
+
+For each of `current_prompt`, `history`, `session_meta`:
 
 ```python
-# Check for distribution shift between train and test
+for col in [<from data_docs>]:
+    print(f"\n=== {col} ===")
+    print(f"  dtype          : {train[col].dtype}")
+    if train[col].dtype == 'object':
+        lens = train[col].fillna('').str.len()
+        print(f"  length p50/p95/max: {lens.quantile(.5):.0f} / {lens.quantile(.95):.0f} / {lens.max()}")
+        print(f"  empty/null     : {(train[col].fillna('').str.len() == 0).sum()}")
+    else:
+        print(train[col].describe())
+```
+
+If `history` is JSON-encoded, parse and report:
+- avg number of actions in history
+- distribution of "last action" type vs target (this is a candidate strong predictor)
+
+## STEP 4 — Train/Test Distribution Shift
+
+```python
 for col in test.columns:
-    if col in train.columns:
-        if train[col].dtype == 'object':
-            train_vals = set(train[col].dropna().unique())
-            test_vals = set(test[col].dropna().unique())
-            unseen = test_vals - train_vals
-            if unseen:
-                print(f"⚠️  {col}: {len(unseen)} unseen values in test!")
+    if col in train.columns and train[col].dtype == 'object':
+        tr = set(train[col].dropna().unique())
+        te = set(test[col].dropna().unique())
+        unseen = te - tr
+        if unseen:
+            print(f"WARN unseen-in-train: {col} has {len(unseen)} novel values in test")
 ```
 
-## Step 4: Competition-Specific Analysis
+For numeric/meta columns, run a 2-sample KS test or compare quantiles; flag if p < 0.01.
 
-Based on competition theme (AI Agent Action Decision):
-- Check for action/label columns and their distribution
-- Look for temporal patterns (timestamps, sequences)
-- Check if data has group structure (sessions, users, agents)
-- Measure text/feature complexity for model size estimation
-- Estimate inference time budget
+## STEP 5 — Leakage Probes (specific to AI Agent Action Decision)
 
-## Step 5: Report
+1. Does `history` ever literally contain the next action label? (If so: the generation method leaks.)
+2. Is there a `session_id` (or equivalent)? If yes, count how many test rows share session with train rows. If > 0, GroupKFold is mandatory for honest CV.
+3. Is `session_meta.remaining_tokens` strongly correlated with target? Could be informative or leakage depending on data construction.
 
-Write findings to `logs/eda_report.md`:
+## STEP 6 — Inference-Budget Forecast
 
+Estimate, in advance, what model sizes will fit:
+
+```python
+# rough token count per test row, assuming TF-IDF / word-level
+text_tokens = test['current_prompt'].fillna('').str.split().str.len()
+hist_tokens = test['history'].fillna('').str.split().str.len()
+print(f"per-row tokens p50/p95: text {text_tokens.quantile(.5):.0f}/{text_tokens.quantile(.95):.0f}, history {hist_tokens.quantile(.5):.0f}/{hist_tokens.quantile(.95):.0f}")
+print(f"test size: {len(test)}  → est. tokens to embed: {(text_tokens + hist_tokens).sum():.0f}")
+```
+
+Use this to filter out architectures that cannot fit the 10-minute inference budget on T4.
+
+## STEP 7 — Write Findings
+
+Append to `data_docs/domain_notes.md`:
 ```markdown
-# EDA Report — YYYY-MM-DD
+## EDA <YYYY-MM-DD>
+- Train/test shape: ...
+- Class imbalance: ratio max/min = ..., minority classes: [...]
+- Key fields: ...
+- Distribution shift flags: ...
+- Leakage probes: ...
+- Inference budget hint: ...
 
-## Data Summary
-- Train: NNN rows × MMM cols
-- Test: NNN rows × MMM cols
-- Target: [col_name], [distribution]
-
-## Key Findings
-1. [most impactful finding]
-2. [second finding]
-3. [third finding]
-
-## Recommended Approach
-- Model type: [suggestion]
-- Key features: [list]
-- CV strategy: [stratified/group/time]
-- Watch out for: [pitfalls]
-
-## Action Items
-- [ ] [first thing to try]
-- [ ] [second thing to try]
+Implications for planning:
+- ...
 ```
 
-Then print: "EDA 완료. `/plan`으로 실험 계획을 세우세요."
+And to `logs/eda_report.md` (overwrite — one-shot snapshot):
+```markdown
+# EDA Snapshot — <date>
+[full numbers, plots references, etc.]
+```
+
+## STEP 8 — Recommended Next Experiments
+
+Print 2–3 concrete experiment ideas that `/plan` can pick up:
+
+```
+Recommended next experiments:
+1. baseline: TF-IDF(current_prompt, 1-2gram) + LightGBM, class_weight=balanced
+2. add last-3 actions from history as categorical features
+3. probe: GroupKFold by session_id if session_id present
+```
+
+End with: `EDA done. Run /plan to convert findings into experiments.`
+
+## Hard Rules
+
+- ALWAYS append to `domain_notes.md`, never overwrite.
+- ALWAYS read `data_docs/` before profiling.
+- NEVER skip the 14-class distribution check — Macro-F1 evaluation hinges on minority classes.
+- NEVER design a model from EDA alone; this skill produces facts, `/plan` produces experiments.

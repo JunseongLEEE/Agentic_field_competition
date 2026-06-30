@@ -12,9 +12,11 @@
 ---
 
 ## Project Overview
-AI competition (DACON, SW중심대학협의회) experiment management system.
+AI competition (DACON, SW중심대학협의회) — **AI Agent Action Decision** (14-class Macro-F1).
 **Code submission** format — submit model weights + inference script, NOT CSV predictions.
 Each experiment is isolated, reproducible, and tracked.
+
+Full details: `competition_meta.yaml` (single source of truth) and `EXPERIMENT_GOAL.md`.
 
 ---
 
@@ -29,16 +31,27 @@ submit.zip
 └── requirements.txt    # Extra packages (beyond server defaults)
 ```
 
+### Server hard limits (위반 시 자동 실격)
+- **zip ≤ 1GB**
+- **설치 ≤ 10분** (pip install -r requirements.txt)
+- **추론 ≤ 10분** (python script.py)
+- **GPU: T4 16GB VRAM | CPU: 3 vCPU | RAM: 12GB**
+- **인터넷 차단** (설치 후)
+
 ### script.py constraints:
-- Reads test data from `data/test.csv` (server provides)
-- Writes predictions to `output/submission.csv`
-- **OFFLINE ONLY** — no internet access, no API calls, no from_pretrained("model-name")
+- Reads test data from `data/` (server provides, 읽기전용)
+- Writes predictions to `output/submission.csv` (필수 파일명)
+- **OFFLINE ONLY** — no API calls, no from_pretrained("model-name")
 - All model files must be loaded from `model/` directory via local paths
 - Must have `if __name__ == '__main__'` block
 
 ### Every experiment produces TWO scripts:
 - `train.py` — local training + CV (never submitted)
 - `script.py` — server-side inference only (submitted)
+
+### Failure types (제출 횟수 차감 기준)
+- **설치 오류** (구조 불일치, 패키지 설치 실패, 설치 시간 초과) — quota 차감 **안 됨**
+- **제출 오류** (script.py 실행 실패, submission.csv 미생성, 추론 시간 초과) — quota 차감 **됨**
 
 ---
 
@@ -102,11 +115,12 @@ agents/              — Agent role definitions
 ### Session Start Protocol
 새 세션이 시작되면 반드시:
 1. `python scripts/check_time_state.py` 실행 → 마감까지 일수 + 오늘 제출 quota 파악
-2. `logs/orchestrator_state.json` 읽어 현재 전략 상태 파악
-3. `logs/experiment_digest.md` 읽어 전체 실험 현황 파악
-4. `logs/insights.jsonl` 최근 5개 읽어 CV-LB 패턴 파악
-5. `data_docs/` 모든 .md 읽어 데이터셋 도메인 컨텍스트 확보
-6. `wiki/` 에서 관련 decisions/lessons 검색하여 과거 컨텍스트 주입
+2. `python scripts/cv_lb_correlation.py` 실행 → CV→LB 예측 모델의 trust_level 확인
+3. `logs/orchestrator_state.json` 읽어 현재 전략 상태 파악
+4. `logs/experiment_digest.md` 읽어 전체 실험 현황 파악 (없으면 `python scripts/init_bridge_files.py` 먼저)
+5. `logs/insights.jsonl` 최근 5개 읽어 CV-LB 패턴 파악
+6. `data_docs/` 모든 .md 읽어 데이터셋 도메인 컨텍스트 확보
+7. `wiki/` 에서 관련 decisions/lessons 검색하여 과거 컨텍스트 주입
 
 ### Session End Protocol
 작업 종료 시 `/compound` 실행하여:
@@ -212,27 +226,20 @@ summary: <한 줄 요약>
 
 ---
 
-## QMD Integration (Optional)
+## Wiki Search
 
-QMD가 설치되어 있으면 wiki를 하이브리드 검색(BM25 + 벡터 + LLM 리랭킹)으로 조회할 수 있다.
+Wiki는 직접 파일 읽기 + Grep으로 검색.
+대회 규모(2주, ~30 페이지) 기준으로 별도 검색 인프라(BM25/벡터)는 불필요.
 
-### Setup
+검색 패턴:
 ```bash
-npm install -g @tobi/qmd
-qmd collection add wiki/ --name wiki --pattern "**/*.md"
-qmd index wiki
-```
+# 주제별 검색
+Grep "feature engineering" wiki/
 
-### MCP Server (`.mcp.json`)
-```json
-{
-  "mcpServers": {
-    "qmd": {
-      "command": "qmd",
-      "args": ["serve", "--mcp", "--port", "8181"]
-    }
-  }
-}
-```
+# 페이지 타입별 인덱스
+ls wiki/decisions/
+ls wiki/lessons/
 
-QMD 없이도 wiki는 직접 파일 읽기/Grep으로 검색 가능. QMD는 검색 품질을 높이는 선택적 레이어.
+# 관련 페이지 follow (related: [[...]])
+Grep "related:" wiki/entities/lightgbm.md
+```

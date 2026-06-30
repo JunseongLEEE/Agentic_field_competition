@@ -13,5 +13,6 @@
   "recent_context_window": 5,
   "last_reasoning": "",
   "competition_metric": null,
-  "data_shape": null
+  "data_shape": null,
+  "num_classes": 14
 }

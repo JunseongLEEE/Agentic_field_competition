@@ -1,5 +1,5 @@
 ---
-description: "Package experiment as DACON code submission zip (model/ + script.py + requirements.txt). Pass experiment name as argument."
+description: "Build the DACON submit.zip (model/ + script.py + requirements.txt). Enforces 1GB cap, offline safety, and a working dry-run before packaging."
 user-invocable: true
 allowed-tools:
   - Bash
@@ -12,149 +12,182 @@ allowed-tools:
 
 # /pack — DACON Code Submission Packager
 
-Create a submission zip following DACON code submission format.
+Package an evaluated CANDIDATE experiment into a server-ready zip.
+You refuse to pack if anything would auto-disqualify on the DACON server.
 
 ## Arguments
-- `$ARGUMENTS` — experiment name (e.g., "exp_001_baseline")
+- `$ARGUMENTS` — experiment id (e.g., `exp_001_baseline_lgbm`).
 
-## Required Zip Structure
+## Required zip layout (no extra files at the top level)
 ```
 submit.zip
-├── model/              # Trained model weights
-│   └── (model files)
-├── script.py           # Inference-only code
-└── requirements.txt    # Extra packages
+├── model/                # weights, encoders, anything script.py loads
+├── script.py             # inference only
+└── requirements.txt      # extras only (keep minimal)
 ```
 
-**NO other files allowed at top level.**
+## Hard server limits (zero tolerance)
+- zip ≤ **1 GB**
+- install (`pip install -r requirements.txt`) ≤ **10 min**
+- inference (`python script.py`) ≤ **10 min** on T4 (3 vCPU, 12GB RAM)
+- offline after install
 
-## Step 1: Locate Experiment
+## STEP 0 — Preconditions
 
 ```bash
-EXP_DIR=experiments/$0  # or search for match
-ls $EXP_DIR/script.py $EXP_DIR/model/ $EXP_DIR/requirements.txt
+EXP="$ARGUMENTS"
+EXP_DIR="experiments/${EXP}"
+
+# Evaluator must have approved
+python - <<PY
+import json
+ev = json.load(open(f"${EXP_DIR}/evaluation.json"))
+assert ev["recommendation"] in ("CANDIDATE", "CANDIDATE_DIVERSITY"), f"not a candidate: {ev['recommendation']}"
+assert ev["submission_readiness"]["offline_check"] == "PASS"
+print("eval gate: OK")
+PY
 ```
 
-## Step 2: Pre-packaging Validation
+If preconditions fail → STOP, print why, do nothing.
 
-### 2a. Check required files exist
-- [ ] `script.py` exists
-- [ ] `model/` directory exists and is not empty
-- [ ] `requirements.txt` exists
+## STEP 1 — Static Offline Scan
 
-### 2b. Offline compatibility scan
 ```bash
-# MUST NOT contain these patterns in script.py:
-grep -n "from_pretrained\b" $EXP_DIR/script.py | grep -v "model/"  # HF hub downloads
-grep -n "requests\.\|urllib\.\|wget\|curl\|download" $EXP_DIR/script.py
-grep -n "api_key\|API_KEY\|openai\.\|anthropic\." $EXP_DIR/script.py
-grep -n "\.download(" $EXP_DIR/script.py
+python scripts/validate_submission.py --script "${EXP_DIR}/script.py"
+
+# Belt-and-suspenders manual scan
+Grep -n "from_pretrained\b" "${EXP_DIR}/script.py" | grep -v "model/" || true
+Grep -nE "requests\.|urllib|wget|curl|\.download\(" "${EXP_DIR}/script.py" || true
+Grep -nE "api_key|API_KEY|openai\.|anthropic\." "${EXP_DIR}/script.py" || true
 ```
 
-If any match → **BLOCK packaging** and report the violation.
+Any match outside `model/` paths → BLOCK packaging.
 
-### 2c. Verify script.py structure
-- [ ] Reads from `data/` directory
-- [ ] Writes to `output/submission.csv`
-- [ ] Has `if __name__ == '__main__'` block
-- [ ] Loads model from `model/` directory (local path)
+## STEP 2 — Structural Checks
 
-### 2d. Check model size
 ```bash
-du -sh $EXP_DIR/model/
-# Warn if > 500MB (server limits vary by competition)
+# script.py must have main guard, read data/, write output/submission.csv
+Grep -n "if __name__ == '__main__'" "${EXP_DIR}/script.py"
+Grep -n "data/" "${EXP_DIR}/script.py"
+Grep -n "output/submission.csv" "${EXP_DIR}/script.py"
 ```
 
-## Step 3: Local Dry Run
+All three must be present. Otherwise BLOCK.
 
-Test that script.py actually works locally:
+## STEP 3 — Size Check
+
 ```bash
-cd $EXP_DIR
+MODEL_MB=$(du -sm "${EXP_DIR}/model" | awk '{print $1}')
+echo "model dir size: ${MODEL_MB} MB"
+test "$MODEL_MB" -lt 900 || { echo "model dir >= 900MB; will not fit under 1GB zip"; exit 2; }
+test "$MODEL_MB" -lt 800 && echo "OK" || echo "WARN: model size approaching cap"
+```
 
-# Create mock data/ directory if not exists (use actual test data)
-mkdir -p data
-cp ../../data/test.csv data/ 2>/dev/null || echo "No test.csv — dry run skipped"
+## STEP 4 — Real Dry-Run on Server-Like Layout
 
-# Run inference
-python script.py
+```bash
+PACK_STAGE=/tmp/pack_${EXP}_$$
+mkdir -p "${PACK_STAGE}/data" "${PACK_STAGE}/output"
+cp -r "${EXP_DIR}/model" "${PACK_STAGE}/"
+cp "${EXP_DIR}/script.py" "${PACK_STAGE}/"
+cp "${EXP_DIR}/requirements.txt" "${PACK_STAGE}/"
+cp data/test.csv data/sample_submission.csv "${PACK_STAGE}/data/" 2>/dev/null || true
 
-# Verify output
-ls output/submission.csv
-python -c "
+START=$(date +%s)
+(cd "${PACK_STAGE}" && timeout 600 python script.py)   # 10-min wall cap, matches server
+DRY_SEC=$(( $(date +%s) - START ))
+
+# Verify submission produced + valid shape
+python - <<PY
 import pandas as pd
-sub = pd.read_csv('output/submission.csv')
-print(f'Shape: {sub.shape}')
-print(f'Columns: {list(sub.columns)}')
-print(sub.head())
-print(f'NaN: {sub.isnull().sum().sum()}')
-"
+sub = pd.read_csv("${PACK_STAGE}/output/submission.csv")
+sample = pd.read_csv("data/sample_submission.csv")
+assert sub.shape[0] == sample.shape[0], f"row mismatch {sub.shape} vs {sample.shape}"
+assert list(sub.columns) == list(sample.columns), f"cols mismatch {list(sub.columns)} vs {list(sample.columns)}"
+assert sub.isnull().sum().sum() == 0, "NaN in submission"
+# Label column must be valid 14-class ids (assumes integer labels)
+label_col = sub.columns[1]
+assert sub[label_col].between(0, 13).all(), "predicted labels out of [0, 13]"
+print("dry-run submission.csv OK")
+PY
 
-# Cleanup
-rm -rf data/ output/
+echo "dry_run_seconds=${DRY_SEC}"
 ```
 
-## Step 4: Package
+`dry_run_seconds > 540` (9 min) → BLOCK. Two-minute safety margin under the 10-min cap.
+
+## STEP 5 — Build zip
 
 ```bash
-cd $EXP_DIR
-mkdir -p ../../submissions
+mkdir -p submissions
+ZIP_PATH="submissions/${EXP}.zip"
+(cd "${PACK_STAGE}" && zip -r "${ZIP_PATH}" model script.py requirements.txt -x "*.DS_Store")
+# Move into project (was created with relative path inside PACK_STAGE)
+mv "${PACK_STAGE}/${ZIP_PATH}" "${ZIP_PATH}" 2>/dev/null || true
 
-# Create zip with ONLY the required files
-zip -r ../../submissions/${EXP_NAME}.zip \
-    model/ \
-    script.py \
-    requirements.txt
+ZIP_BYTES=$(stat -f%z "${ZIP_PATH}" 2>/dev/null || stat -c%s "${ZIP_PATH}")
+ZIP_MB=$(( ZIP_BYTES / 1024 / 1024 ))
+echo "zip size: ${ZIP_MB} MB"
+test "${ZIP_BYTES}" -lt 1073741824 || { echo "zip exceeds 1 GB"; rm -f "${ZIP_PATH}"; exit 2; }
 
-# Verify zip contents
-unzip -l ../../submissions/${EXP_NAME}.zip
+# Inspect contents
+unzip -l "${ZIP_PATH}"
 ```
 
-## Step 5: Validate Zip
+## STEP 6 — Metadata
 
 ```bash
-python ../../scripts/validate_submission.py --zip ../../submissions/${EXP_NAME}.zip
-```
-
-## Step 6: Metadata
-
-```python
-import hashlib, json
+SHA=$(shasum -a 256 "${ZIP_PATH}" | awk '{print $1}')
+python - <<PY
+import json, hashlib
 from datetime import datetime
-
-zip_path = f'../../submissions/{EXP_NAME}.zip'
-sha256 = hashlib.sha256(open(zip_path, 'rb').read()).hexdigest()
-
+ev = json.load(open(f"experiments/${EXP}/evaluation.json"))
 meta = {
-    "experiment_id": EXP_NAME,
-    "cv_score": cv_mean,  # from train_log.json
-    "model_size_mb": model_size,
-    "inference_ms_per_sample": speed,
-    "sha256": sha256,
-    "created_at": datetime.now().isoformat(),
-    "offline_verified": True,
-    "dry_run_passed": True
+  "experiment_id": "${EXP}",
+  "cv_macro_f1": ev["scores"]["cv_macro_f1"],
+  "predicted_lb": ev["lb_prediction"]["predicted_lb"],
+  "lb_prediction_interval": [ev["lb_prediction"]["pi_low"], ev["lb_prediction"]["pi_high"]],
+  "trust_level": ev["lb_prediction"]["trust_level"],
+  "model_size_mb": ev["submission_readiness"]["model_size_mb"],
+  "estimated_inference_min": ev["submission_readiness"]["estimated_full_test_minutes"],
+  "dry_run_seconds": int(${DRY_SEC}),
+  "zip_size_mb": int(${ZIP_MB}),
+  "sha256": "${SHA}",
+  "offline_check": "PASS",
+  "packed_at": datetime.now().astimezone().isoformat(),
 }
+open(f"submissions/${EXP}.meta.json", "w").write(json.dumps(meta, indent=2))
+print(json.dumps(meta, indent=2))
+PY
+
+rm -rf "${PACK_STAGE}"
 ```
 
-## Step 7: Report
+## STEP 7 — Report
 
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SUBMISSION PACKAGED: exp_NNN_name
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Zip:            submissions/exp_NNN_name.zip
-Size:           XX MB
-Model size:     XX MB
-Offline check:  PASS ✓
-Dry run:        PASS ✓
-CV Score:       0.XXXX
+═════════════════════════════════════════════
+PACKAGED: exp_NNN_name
+═════════════════════════════════════════════
+zip          : submissions/exp_NNN_name.zip   (<MB> MB / 1024 MB cap)
+sha256       : <hash>
+model dir    : <MB> MB
+dry-run      : <S>s  (cap 540s)
+offline scan : PASS
 
-Contents:
-  model/          XX files, XX MB
-  script.py       ✓
-  requirements.txt ✓
+CV Macro-F1    : <0.XXXX>
+Predicted LB   : <0.XXXX>  PI=[<lo>, <hi>]  trust=<level>
+vs current best LB <0.XXXX>: Δ=<+/-0.XXXX>
 
-⚠️  수동 제출 필요 — DACON 사이트에서 직접 업로드
-다음 단계: /rank (후보 순위 확인)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  Manual upload required — DACON web only. NEVER auto-submit.
+Next: /rank to confirm this is today's best use of a submission slot.
+═════════════════════════════════════════════
 ```
+
+## Hard Rules
+
+- DO NOT pack if evaluator did not return CANDIDATE / CANDIDATE_DIVERSITY.
+- DO NOT pack if offline scan finds a network call.
+- DO NOT pack if dry-run produces no `output/submission.csv` or it has wrong shape.
+- DO NOT pack if zip > 1 GB.
+- DO NOT upload anywhere. Manual submission only.

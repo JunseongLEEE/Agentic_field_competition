@@ -98,8 +98,8 @@ def validate(zip_path: Path):
         )
         model_size_mb = total_model_size / (1024 * 1024)
         print(f"\nModel files: {len(model_files)} files, {model_size_mb:.1f} MB")
-        if model_size_mb > 2000:
-            warnings.append(f"Model size is {model_size_mb:.0f} MB — may exceed server limits")
+        if model_size_mb > 800:
+            warnings.append(f"Model size is {model_size_mb:.0f} MB — leaves <200MB for other zip contents (zip limit 1GB)")
 
     # Check for unexpected top-level entries
     allowed_top = {"model", "script.py", "requirements.txt"}
@@ -149,9 +149,14 @@ def validate(zip_path: Path):
         else:
             print("\nrequirements.txt: empty (using server defaults only)")
 
-    # === 4. File size ===
+    # === 4. File size (DACON hard limit: 1GB) ===
     zip_size_mb = zip_path.stat().st_size / (1024 * 1024)
-    print(f"\nTotal zip size: {zip_size_mb:.1f} MB")
+    zip_size_gb = zip_size_mb / 1024
+    print(f"\nTotal zip size: {zip_size_mb:.1f} MB ({zip_size_gb:.3f} GB)")
+    if zip_size_mb > 1024:
+        errors.append(f"ZIP SIZE EXCEEDS 1GB LIMIT: {zip_size_mb:.1f} MB — DACON will reject")
+    elif zip_size_mb > 900:
+        warnings.append(f"Zip size {zip_size_mb:.0f} MB approaches 1GB limit")
 
     # === Results ===
     _print_results(errors, warnings)
