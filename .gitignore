@@ -28,3 +28,8 @@ venv/
 
 # OS
 .DS_Store
+
+# Webapp — never commit passwords or backups
+webapp/.streamlit/secrets.toml
+logs/backups/
+대화.md

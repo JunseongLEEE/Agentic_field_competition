@@ -1,0 +1,28 @@
+# systemd unit for the DACON dashboard.
+#
+# Install:
+#   1. Edit User= and WorkingDirectory= to match your machine.
+#   2. sudo cp webapp/deploy/dashboard.service /etc/systemd/system/
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now dashboard
+#
+# Logs:
+#   journalctl -u dashboard -f
+
+[Unit]
+Description=DACON Competition Dashboard (Streamlit)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USER
+WorkingDirectory=/abs/path/to/competition-repo
+ExecStart=/usr/bin/env bash webapp/deploy/start_local.sh
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

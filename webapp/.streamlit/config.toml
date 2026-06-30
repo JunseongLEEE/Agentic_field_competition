@@ -1,0 +1,17 @@
+[server]
+# Bind to localhost only — Cloudflare Tunnel exposes externally.
+address = "127.0.0.1"
+port = 8501
+headless = true
+runOnSave = false
+maxUploadSize = 5
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "dark"
+primaryColor = "#FF6B6B"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#1E2129"
+textColor = "#FAFAFA"

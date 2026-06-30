@@ -1,0 +1,32 @@
+# systemd unit for the Cloudflare Tunnel.
+#
+# Quick-tunnel mode prints a new *.trycloudflare.com URL on every restart,
+# so for stability consider switching to a named tunnel:
+#   cloudflared tunnel login
+#   cloudflared tunnel create dacon-dashboard
+#   cloudflared tunnel route dns dacon-dashboard dacon.your-domain.com
+#   then set Environment=CF_TUNNEL_NAME=dacon-dashboard
+#
+# Install:
+#   sudo cp webapp/deploy/tunnel.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now tunnel
+
+[Unit]
+Description=Cloudflare Tunnel for DACON Dashboard
+After=dashboard.service
+Requires=dashboard.service
+
+[Service]
+Type=simple
+User=YOUR_USER
+WorkingDirectory=/abs/path/to/competition-repo
+# Environment=CF_TUNNEL_NAME=dacon-dashboard
+ExecStart=/usr/bin/env bash webapp/deploy/start_tunnel.sh
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
