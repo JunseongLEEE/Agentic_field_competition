@@ -20,6 +20,16 @@ You implement experiments for an AI competition. Each experiment produces TWO co
 ## Arguments
 - `$ARGUMENTS` — experiment name or description (e.g., "baseline_lgbm", "transformer_small")
 
+## Step 0: Read Context (MANDATORY)
+
+코드 작성 전 반드시 읽기:
+1. `data_docs/*.md` — 데이터 스키마, 생성 방법, 도메인 노트
+2. `data_docs/references/*.md` — 참고된 오픈소스 정보 (전처리/모델링 hint)
+3. `wiki/lessons/` Grep으로 관련 모델/피처 검색 — 같은 실수 반복 방지
+4. `competition_meta.yaml` — 마감일 인식 (D-day 가까우면 simpler 코드 선호)
+
+이 정보 없이 train.py를 작성하면 잘못된 가정으로 시간을 낭비할 가능성 큼.
+
 ## DACON Submission Format (MUST follow)
 
 The final submission zip structure:

@@ -19,11 +19,15 @@ You are the experiment planning orchestrator for an AI competition (SW중심대�
 
 **This year's competition**: AI Agent Action Decision prediction — lightweight, fast decision-making AI model under resource constraints.
 
+!`python scripts/check_time_state.py 2>/dev/null || echo "time state check failed"`
+
 !`cat EXPERIMENT_GOAL.md 2>/dev/null || echo "EXPERIMENT_GOAL.md not found"`
 
 !`cat EXPERIMENT_LOG.csv 2>/dev/null || echo "No experiments yet"`
 
 !`cat LEADERBOARD_LOG.md 2>/dev/null || echo "No LB entries yet"`
+
+!`ls data_docs/ 2>/dev/null && echo "→ read data_docs/ before planning" || echo "no data_docs yet"`
 
 ## Step 0: Wiki Search (ALWAYS do this first)
 
@@ -81,10 +85,24 @@ After presenting the plan, ask: "이 계획으로 진행할까요? 수정할 부
 
 ## Decision Rules
 
-- **Day 1-3**: Baseline + CV setup + EDA. No fancy models yet.
-- **Day 4-8**: Feature engineering + model exploration. Parallel experiments.
-- **Day 9-12**: Ensemble + stacking + hyperparameter tuning.
-- **Day 13-14**: Final selection + stability analysis. No new architectures.
+### Time-pressure rules (from check_time_state.py)
+- **D-7 이상**: 자유 탐색 — 새 모델/피처 시도 가능
+- **D-3 ~ D-7**: 검증된 방향만 확장. 새 아키텍처는 강한 가설 있을 때만
+- **D-1 ~ D-3**: 안정화 단계. seed ensemble, stability check, 작은 튜닝만
+- **D-day**: 새 코드 작성 금지. 이미 검증된 candidate 중 선택만
+
+### Daily quota rules
+- 오늘 quota 8/10 이상 사용 시: 새 실험 멈추고 기존 candidate 평가 우선
+- quota가 1~2개만 남으면: 가장 자신있는 candidate 1개만 제출, diversity 포기
+
+### Phase rules (relative to phase, not absolute days)
+- Phase "baseline": LightGBM/XGBoost/CatBoost로 CV setup 확립
+- Phase "feature_eng": 피처 엔지니어링 위주
+- Phase "model_exploration": 다양한 모델 패밀리 시도
+- Phase "ensemble": 다양성 있는 blending
+- Phase "final": stability + final candidate 선정
+
+### General
 - Never plan more than 4 experiments at once.
 - Always include 1 "safe" incremental improvement.
 - If CV-LB gap is growing, prioritize debugging CV setup over new models.

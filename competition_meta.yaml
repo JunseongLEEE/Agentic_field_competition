@@ -1,0 +1,14 @@
+competition:
+  name: SW중심대학협의회 — AI Agent Action Decision
+  organizer: DACON
+  description: AI Agent 행동(Action) 의사결정 예측 챌린지
+deadlines:
+  preliminary: '2026-07-15T10:00:00+09:00'
+  final_code: '2026-07-20T10:00:00+09:00'
+  poster: '2026-07-30T10:00:00+09:00'
+limits:
+  daily_submission_limit: 10
+  max_zip_size_gb: 10
+  max_runtime_minutes_per_experiment: 60
+  finalist_top_n: 12
+submissions_log: []

@@ -108,7 +108,14 @@ Append a new row to the table.
 python scripts/build_digest.py
 ```
 
-### 4f. Update orchestrator_state.json
+### 4f. Record submission in competition_meta.yaml (daily quota tracking)
+```bash
+python scripts/track_submission.py --exp <exp_name> --lb <lb_score> --status success
+```
+- 만약 설치 오류였다면: `--status install_error` (일일 quota에 안 차감됨)
+- 런타임 오류였다면: `--status runtime_error` (일일 quota 차감됨)
+
+### 4g. Update orchestrator_state.json
 If this is the best LB score, update. Add insight to strategy considerations.
 
 ## Step 5: Report

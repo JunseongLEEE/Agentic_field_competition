@@ -15,6 +15,21 @@ Fast, structured EDA for competition data. Designed to extract actionable insigh
 ## Arguments
 - `$ARGUMENTS` — optional: specific focus area (e.g., "target distribution", "text lengths", "missing values")
 
+## Step 0: Read Data Documentation
+
+EDA를 시작하기 전 `data_docs/`를 모두 읽는다. 데이터셋이 어떻게 만들어졌는지를 알면 EDA에서 무엇을 봐야 할지가 명확해진다.
+
+```bash
+ls data_docs/ 2>/dev/null && cat data_docs/*.md
+```
+
+특히 확인할 것:
+- `generation_methodology.md` — 데이터가 어떻게 만들어졌나
+- `references/` — 어떤 오픈소스를 참고했나
+- `domain_notes.md` — 이전 EDA에서 발견된 패턴
+
+EDA 결과는 `domain_notes.md`에 누적 기록 (덮어쓰기 금지, append).
+
 ## Step 1: Data Overview
 
 ```python

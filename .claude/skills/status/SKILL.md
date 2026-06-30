@@ -13,6 +13,10 @@ Show a complete overview of competition progress.
 
 ## Display
 
+### 0. Time State (deadlines + daily quota)
+
+!`python scripts/check_time_state.py 2>/dev/null || echo "competition_meta.yaml not found"`
+
 ### 1. Experiment Summary
 
 !`cat EXPERIMENT_LOG.csv 2>/dev/null || echo "No experiments yet"`

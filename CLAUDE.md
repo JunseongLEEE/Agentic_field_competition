@@ -44,9 +44,16 @@ submit.zip
 
 ## Directory Structure
 ```
-.claude/skills/  — Slash command skills
-scripts/         — Python utility scripts
-experiments/     — One folder per experiment (exp_001/, exp_002/, ...)
+.claude/skills/      — Slash command skills
+scripts/             — Python utility scripts
+competition_meta.yaml — 대회 마감일/제출 quota/제출 로그 (single source of truth)
+data_docs/           — 데이터셋 문서 (생성 방법, 오픈소스 출처, 도메인 노트)
+  ├── README.md
+  ├── dataset_overview.md     # 데이터 스키마/크기
+  ├── generation_methodology.md  # 사용자 작성: 데이터 만든 방법
+  ├── domain_notes.md         # EDA로 발견한 패턴 누적
+  └── references/             # 참고 오픈소스/논문
+experiments/         — One folder per experiment (exp_001/, exp_002/, ...)
   └── exp_NNN/
       ├── config.yaml
       ├── train.py         # Training + CV (local only)
@@ -56,7 +63,7 @@ experiments/     — One folder per experiment (exp_001/, exp_002/, ...)
       ├── models/          # Per-fold models (not submitted)
       ├── SUMMARY.md       # Experiment memory card
       └── train_log.json   # CV results
-wiki/            — LLM Wiki (Compound Knowledge Base)
+wiki/                — LLM Wiki (Compound Knowledge Base)
   ├── _meta/
   │   ├── conventions.md   # Wiki 작성 규약
   │   └── index.md         # Entity 페이지 인덱스
@@ -65,14 +72,14 @@ wiki/            — LLM Wiki (Compound Knowledge Base)
   ├── lessons/             # 실수/디버깅 교훈
   ├── context/             # 프로젝트별 컨텍스트 스냅샷
   └── sessions/            # 세션 로그 (compound 입력 원본)
-logs/            — Bridge files for agent communication
+logs/                — Bridge files for agent communication
   ├── orchestrator_state.json
   ├── experiment_digest.md
   ├── insights.jsonl
   ├── cycle_history.jsonl
   └── agent_messages.jsonl
-submissions/     — Packaged zip files ready for DACON upload
-agents/          — Agent role definitions
+submissions/         — Packaged zip files ready for DACON upload
+agents/              — Agent role definitions
 ```
 
 ---
@@ -94,10 +101,12 @@ agents/          — Agent role definitions
 
 ### Session Start Protocol
 새 세션이 시작되면 반드시:
-1. `logs/orchestrator_state.json` 읽어 현재 전략 상태 파악
-2. `logs/experiment_digest.md` 읽어 전체 실험 현황 파악
-3. `logs/insights.jsonl` 최근 5개 읽어 CV-LB 패턴 파악
-4. `wiki/` 에서 관련 decisions/lessons 검색하여 과거 컨텍스트 주입
+1. `python scripts/check_time_state.py` 실행 → 마감까지 일수 + 오늘 제출 quota 파악
+2. `logs/orchestrator_state.json` 읽어 현재 전략 상태 파악
+3. `logs/experiment_digest.md` 읽어 전체 실험 현황 파악
+4. `logs/insights.jsonl` 최근 5개 읽어 CV-LB 패턴 파악
+5. `data_docs/` 모든 .md 읽어 데이터셋 도메인 컨텍스트 확보
+6. `wiki/` 에서 관련 decisions/lessons 검색하여 과거 컨텍스트 주입
 
 ### Session End Protocol
 작업 종료 시 `/compound` 실행하여:
@@ -116,6 +125,8 @@ agents/          — Agent role definitions
 6. **Experiment memory** — every experiment has SUMMARY.md for instant context recovery.
 7. **Compound before close** — 세션 종료 전 반드시 /compound로 지식 축적.
 8. **Search before plan** — 새 실험 계획 전 반드시 wiki에서 과거 교훈 검색.
+9. **Time-aware planning** — 모든 plan은 마감일 + 오늘 quota를 반영해야 함.
+10. **Read data_docs first** — dev agent에게 위임 전 반드시 data_docs/ 컨텍스트 주입.
 
 ---
 
