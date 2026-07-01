@@ -139,7 +139,7 @@ experiments:
     approach:
       model_family: lightgbm | xgboost | catboost | mlp | distil_bert_ko | other
       feature_set: <short tag>
-      cv: stratified_5fold
+      cv: stratified_group_5fold   # StratifiedGroupKFold(5, shuffle, seed=42), group = session id
     verification_protocol:
       accept_if: "cv_macro_f1 > <baseline_macro_f1> + <delta> AND min_per_class_f1 > <threshold>"
       reject_if: "cv_std > 0.02 OR any class F1 < 0.05"
@@ -165,7 +165,7 @@ Print a one-screen summary:
 PLAN plan_YYYYMMDD_HHMM
 ─────────────────────────────────────────
 Phase           : <phase>
-Days to D-day   : <N>      Quota today: <used>/10
+Days to D-day   : <N>      Quota today: <used>/20
 Best CV         : <0.XXXX> | Best LB: <0.XXXX or n/a>
 CV→LB trust     : <low|medium|high>
 

@@ -1,0 +1,49 @@
+experiment_id: exp_013_engineered_char_calib
+description: >
+  exp_010's PCA-filtered + 25 engineered features, PLUS two error-analysis levers:
+  (1) a Korean-aware char_wb(2,3) TF-IDF channel, (2) OOF per-class multiplicative
+  probability calibration (coordinate ascent) tuned to maximize Macro-F1.
+
+hypothesis: >
+  Error analysis found top-2 acc 0.84 >> top-1 0.67 (argmax tie-break is the
+  bottleneck) and read/search cluster = 55% of errors. Adding a char n-gram channel
+  (mixed KO/EN prompts) + OOF Macro-F1 calibration should beat exp_010 (~0.68 CV),
+  with the calibration gain concentrated in low-recall classes (list_directory,
+  read_file, web_search).
+
+model:
+  type: lightgbm
+  objective: multiclass
+  num_class: 14
+  n_estimators: 500
+  learning_rate: 0.05
+  num_leaves: 63
+  min_child_samples: 20
+  subsample: 0.8
+  colsample_bytree: 0.6
+  reg_lambda: 2.0
+  reg_alpha: 0.1
+  sample_weight: balanced
+  n_jobs: 16
+  seed: 42
+
+cv:
+  strategy: StratifiedGroupKFold
+  n_splits: 5
+  group: session_id
+  seed: 42
+
+features:
+  word_tfidf: word(1,2) max_features=25000 min_df=2 sublinear_tf
+  char_tfidf: char_wb(2,3) max_features=8000 min_df=5 sublinear_tf   # narrow ngram per stall lesson
+  engineered: reuse exp_010 (prompt_intent, action_bigram/trigram, turn_action,
+    session_phase, workspace_archetype, last_action_status, phase ratios, ...)
+
+calibration:
+  method: coordinate_ascent_per_class_multiplicative_weights
+  objective: OOF Macro-F1 of argmax(oof * w)
+  grid: 0.5..2.0 step 0.1
+  passes: 10
+  artifact: model/class_weights.json
+
+seed: 42

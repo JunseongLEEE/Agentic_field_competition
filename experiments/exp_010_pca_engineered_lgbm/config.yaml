@@ -1,0 +1,69 @@
+experiment_id: exp_010_pca_engineered_lgbm
+description: >
+  PCA-filtered features + 25 new engineered features.
+  Drops 7 low-MI/low-PCA features (user_tier, cnt_respond_only, prompt_has_exclaim,
+  prompt_has_code, prompt_is_korean, n_actions, prompt_len_chars).
+  Adds interaction features: action_bigram, action_trigram, turn_action,
+  last_action_status, prompt_intent, session_phase, workspace_archetype,
+  phase ratios, consec_same, unique_actions, etc.
+
+hypothesis: >
+  New interaction features (top MI: prompt_intent 0.44, action_trigram 0.43,
+  action_bigram 0.40) should lift GroupKFold CV Macro-F1 from ~0.67 to >0.72.
+
+model:
+  type: lightgbm
+  n_estimators: 500
+  learning_rate: 0.06
+  num_leaves: 127
+  min_child_samples: 20
+  subsample: 0.8
+  colsample_bytree: 0.6
+  reg_lambda: 2.0
+  reg_alpha: 0.1
+
+cv:
+  strategy: StratifiedGroupKFold
+  n_splits: 5
+  group: session_id
+  seed: 42
+
+features:
+  tfidf: word(1,2) max_features=25000
+  n_dense: 71
+  dropped:
+    - user_tier (MI=0.001)
+    - cnt_respond_only (MI=0, always 0)
+    - prompt_has_exclaim (MI=0)
+    - prompt_has_code (MI=0.001)
+    - prompt_is_korean (redundant with language_pref, r=0.75)
+    - n_actions (duplicate of history_len, r=1.0)
+    - prompt_len_chars (redundant with prompt_len_words, r=0.93)
+  new:
+    - prompt_intent (MI=0.438)
+    - action_trigram (MI=0.426)
+    - action_bigram (MI=0.396)
+    - turn_action (MI=0.304)
+    - last_action_status (MI=0.261)
+    - modify_ratio (MI=0.146)
+    - result_cat (MI=0.142)
+    - steps_remaining (MI=0.139)
+    - unique_actions (MI=0.122)
+    - most_common_action_ratio (MI=0.120)
+    - open_ext (MI=0.117)
+    - session_phase (MI=0.113)
+    - explore_ratio (MI=0.104)
+    - prompt_len_bucket (MI=0.085)
+    - last_is_modify (MI=0.078)
+    - consec_same (MI=0.073)
+    - has_read_edit_cycle (MI=0.054)
+    - verify_ratio (MI=0.054)
+    - last_is_explore (MI=0.048)
+    - workspace_archetype (MI=0.037)
+    - last_n_files (MI=0.031)
+    - meta_ratio (MI=0.029)
+    - has_path_ref (MI=0.025)
+    - last_is_verify (MI=0.016)
+    - recent_fails (MI=0.013)
+
+seed: 42

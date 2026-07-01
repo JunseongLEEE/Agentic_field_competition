@@ -36,10 +36,25 @@ python scripts/validate_submission.py --script "${EXP_DIR}/script.py"
 
 ## STEP 1 — Run train.py with Wall-Clock Cap
 
+**Rule A (foreground/wait):** run `train.py` in the FOREGROUND and WAIT for it to
+exit. NEVER background-and-exit — that orphans the training and skips verify +
+dry-run. You are done with this step only when `train_log.json` + `oof_preds.npy`
++ `test_preds.npy` exist. **Rule B (thread cap):** on a 128-core box, cap CPU
+threads ≤ 16 (`OMP_NUM_THREADS`/model `n_jobs`) and run at most 2 heavy trainings
+in parallel — full-core fan-out causes oversubscription thrash (jobs hang for
+tens of minutes). Prefer GPU (local RTX 3090) when the model supports it.
+
+Run unbuffered (`python -u`) and `tee` to the standard live-log path
+`experiments/<exp>/train.log` so the user can `tail -f` progress in real time.
+train.py also installs its own line-buffered Tee to that same file (covers any
+launch mode), so `-u | tee -a` here is belt-and-suspenders.
+
 ```bash
 mkdir -p "${EXP_DIR}/model" "${EXP_DIR}/models"
+export OMP_NUM_THREADS=16               # Rule B: cap threads on the 128-core box
 START=$(date +%s)
-(cd "${EXP_DIR}" && timeout 3600 python train.py 2>&1 | tee run_output.txt)
+# FOREGROUND (no &): unbuffered + tee to the live log; wait for completion
+(cd "${EXP_DIR}" && timeout 3600 python -u train.py 2>&1 | tee -a train.log | tee run_output.txt)
 END=$(date +%s)
 echo "wall_seconds=$((END-START))"
 ```
@@ -79,45 +94,57 @@ PY
 
 This is mandatory. We must prove inference fits the 10-min budget BEFORE we ever ask DACON to run it.
 
+Note: test input is `data/test.jsonl` (JSONL, NOT csv). The repo `test.jsonl` is
+only a 5-row SAMPLE; the real server test is **30,000 hidden rows**. So run
+script.py once on the real `data/test.jsonl` to prove correctness, and separately
+time it on a ~1000-row JSONL sample built from `train.jsonl` (labels dropped) to
+extrapolate inference time to 30,000 rows. `features.py` must be copied alongside
+`script.py` (script.py imports it).
+
 ```bash
 RUN_DIR=/tmp/dryrun_${EXP_NAME}_$$
 mkdir -p "${RUN_DIR}/data" "${RUN_DIR}/output"
 cp -r "${EXP_DIR}/model" "${RUN_DIR}/"
 cp "${EXP_DIR}/script.py" "${RUN_DIR}/"
+cp "${EXP_DIR}/features.py" "${RUN_DIR}/" 2>/dev/null || true   # script.py imports it
 cp data/sample_submission.csv "${RUN_DIR}/data/" 2>/dev/null || true
 
-# Use a 1000-row slice for speed; extrapolate runtime to full test
-head -n 1001 data/test.csv > "${RUN_DIR}/data/test.csv"
-SAMPLE_ROWS=$(($(wc -l < "${RUN_DIR}/data/test.csv") - 1))
-FULL_ROWS=$(($(wc -l < data/test.csv) - 1))
+# (a) correctness run on the real 5-row test.jsonl
+cp data/test.jsonl "${RUN_DIR}/data/test.jsonl"
+(cd "${RUN_DIR}" && timeout 300 python script.py)
+test -f "${RUN_DIR}/output/submission.csv" || { echo "submission.csv NOT produced"; exit 2; }
 
+# (b) timing sample: ~1000 JSONL rows from train.jsonl (test.jsonl too small to time)
+head -n 1000 data/train.jsonl > "${RUN_DIR}/data/test.jsonl"
+SAMPLE_ROWS=$(wc -l < "${RUN_DIR}/data/test.jsonl")
+FULL_ROWS=30000                                   # real server test size (hidden)
 START=$(date +%s)
 (cd "${RUN_DIR}" && timeout 300 python script.py)
 END=$(date +%s)
 SAMPLE_SEC=$((END-START))
 
-# Verify submission produced
-test -f "${RUN_DIR}/output/submission.csv" || { echo "submission.csv NOT produced"; exit 2; }
-
-# Verify shape matches sample_submission
+# Verify label column: values must be the 14 STRING class names, not ints
 python - <<PY
 import pandas as pd
+CLASSES={"read_file","grep_search","list_directory","glob_pattern","edit_file",
+"write_file","apply_patch","run_bash","run_tests","lint_or_typecheck","ask_user",
+"plan_task","web_search","respond_only"}
 sub = pd.read_csv("${RUN_DIR}/output/submission.csv")
-sample = pd.read_csv("data/sample_submission.csv") if False else None
-print(f"submission shape: {sub.shape}")
-print(f"columns: {list(sub.columns)}")
-print(f"NaN: {sub.isnull().sum().sum()}")
+print(f"submission shape: {sub.shape}  columns: {list(sub.columns)}  NaN: {sub.isnull().sum().sum()}")
+bad = set(sub['action'].unique()) - CLASSES
+assert not bad, f"BAD action labels (must be 14 strings, not ints): {bad}"
+print("label check PASS — all action values in the 14 string classes")
 print(sub.head())
 PY
 
 EXTRAPOLATED_MIN=$(python -c "print(round(${SAMPLE_SEC} * ${FULL_ROWS} / max(${SAMPLE_ROWS},1) / 60, 2))")
-echo "sample_seconds=${SAMPLE_SEC}  estimated_full_minutes=${EXTRAPOLATED_MIN}"
+echo "sample_rows=${SAMPLE_ROWS} sample_seconds=${SAMPLE_SEC}  estimated_30000_row_minutes=${EXTRAPOLATED_MIN}"
 
 # Cleanup
 rm -rf "${RUN_DIR}"
 ```
 
-Hard guard: if `estimated_full_minutes > 8.0` → set status=REVIEW, reason="inference budget at risk".
+Hard guard: if `estimated_30000_row_minutes > 8.0` → set status=REVIEW, reason="inference budget at risk" (server cap is 10 min for 30,000 rows).
 
 ## STEP 4 — Update train_log.json with Dry-Run Numbers
 
@@ -192,6 +219,9 @@ Next: /eval exp_NNN_name
 ## Hard Rules
 
 - NEVER edit experiment code from this skill.
+- NEVER background-and-exit `train.py` (Rule A) — run it in the FOREGROUND and WAIT until `train_log.json` + `oof_preds.npy` + `test_preds.npy` exist.
+- NEVER run heavy trainings with `n_jobs=-1`/full-core fan-out (Rule B) — cap threads ≤ 16 (`OMP_NUM_THREADS`) and ≤ 2 in parallel.
+- ALWAYS run unbuffered + tee to `experiments/<exp>/train.log` so progress is watchable live (`tail -f`).
 - NEVER skip the dry-run.
 - NEVER mark an experiment CANDIDATE here — that is `/eval`'s job.
 - ALWAYS rebuild the digest at the end.

@@ -1,1 +1,4 @@
 experiment_id,name,hypothesis,status,cv_score,cv_std,lb_score,cv_lb_gap,seed,git_commit,created_at,completed_at,notes
+exp_mock_test,exp_mock_test,,success,,,0.1965,,,,2026-07-01 11:00:08,2026-07-01 11:00:08,
+exp_001_tfidf_lightgbm,tfidf_lightgbm_word+structured,word tfidf + structured/seq/rule features + LightGBM beats baseline,SUBMITTED,0.660536,0.004435,0.675295,-0.014759,42,local,2026-07-01,2026-07-01,GroupKFold(3); LB>CV; first anchor; requirements ABI fixed
+exp_010_pca_engineered_lgbm,exp_010_pca_engineered_lgbm,,success,,,0.6871,,,,2026-07-01 18:09:51,2026-07-01 18:09:51,

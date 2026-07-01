@@ -1,0 +1,63 @@
+experiment:
+  id: exp_002_tfidf_xgboost
+  hypothesis: "Same domain-informed TF-IDF + sequential + rule + meta feature pipeline as exp_001, with XGBoost multiclass and balanced sample weights, on Macro-F1"
+  expected_macro_f1: 0.55
+  verification_protocol:
+    accept_if: "CV Macro-F1 > 0.45 with no collapsed classes (F1<0.05)"
+    reject_if: "CV Macro-F1 < 0.35 or >=3 collapsed classes"
+  created: "2026-07-01"
+  git_commit: "unknown"
+
+data:
+  train_path: ../../data/train.jsonl
+  train_labels_path: ../../data/train_labels.csv
+  test_path: ../../data/test.jsonl
+  sample_submission_path: ../../data/sample_submission.csv
+  target_col: action
+  id_col: id
+  text_cols: [current_prompt]
+  history_col: history
+
+cv:
+  n_splits: 5
+  strategy: stratified
+  seed: 42
+
+model:
+  type: xgboost
+  num_class: 14
+  objective: multi:softprob
+  class_weight: balanced
+  test_pred_source: full_retrain
+  params:
+    n_estimators: 600
+    learning_rate: 0.05
+    max_depth: 8
+    min_child_weight: 5
+    subsample: 0.8
+    colsample_bytree: 0.6
+    reg_lambda: 1.0
+    reg_alpha: 0.0
+    tree_method: hist
+    early_stopping_rounds: 50
+    n_jobs: -1
+
+features:
+  tfidf:
+    word:
+      analyzer: word
+      ngram_range: [1, 2]
+      max_features: 30000
+      min_df: 2
+    char:
+      analyzer: char_wb
+      ngram_range: [2, 4]
+      max_features: 20000
+      min_df: 2
+
+output:
+  oof_predictions: oof_preds.npy
+  test_predictions: test_preds.npy
+  weights_dir: model/
+  per_fold_dir: models/
+  log_file: train_log.json

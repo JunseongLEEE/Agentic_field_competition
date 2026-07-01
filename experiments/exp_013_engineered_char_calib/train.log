@@ -1,0 +1,5 @@
+loaded 70000 rows, 9429 sessions
+dense features: 65
+fold0 fitted vectorizers, X=(55716, 33065) (31s)
+fold0 macroF1=0.6898 (3216s)
+fold1 fitted vectorizers, X=(56048, 33065) (3234s)

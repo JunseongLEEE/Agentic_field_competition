@@ -30,10 +30,24 @@ You must know the column names and the dataset construction process before profi
 
 ## STEP 1 — Schema and Shape
 
+Data is **JSONL, not CSV**. `data/train.jsonl` (70,000 rows; keys `id`,
+`session_meta`, `history`, `current_prompt`) is joined by `id` to
+`data/train_labels.csv` (`id,action`). `data/test.jsonl` in the repo is a 5-row
+SAMPLE (real server test = 30,000 hidden). `data/sample_submission.csv` stays CSV
+(cols `id,action`). Use the loaders in
+`experiments/exp_001_tfidf_lightgbm/features.py`.
+
 ```python
-import pandas as pd, numpy as np
-train = pd.read_csv('data/train.csv')
-test  = pd.read_csv('data/test.csv')
+import pandas as pd, numpy as np, json
+from sys import path; path.insert(0, 'experiments/exp_001_tfidf_lightgbm')
+from features import load_jsonl
+
+train_raw = load_jsonl('data/train.jsonl')                 # list[dict]
+test_raw  = load_jsonl('data/test.jsonl')                  # 5-row sample
+train = pd.json_normalize(train_raw)                       # flattens session_meta.*
+test  = pd.json_normalize(test_raw)
+labels = pd.read_csv('data/train_labels.csv')              # id,action (action = 14 strings)
+train = train.merge(labels, on='id', how='left')          # attach target `action`
 sample = pd.read_csv('data/sample_submission.csv')
 
 print("SHAPES")
@@ -58,7 +72,7 @@ print(test.isnull().sum().sort_values(ascending=False).head(10))
 ## STEP 2 — 14-Class Target Distribution (Macro-F1 critical)
 
 ```python
-target = '<from data_docs/dataset_overview.md>'
+target = 'action'   # 14 snake_case STRING classes (from train_labels.csv), NOT ints 0-13
 vc = train[target].value_counts(normalize=True).sort_index()
 print("CLASS DISTRIBUTION")
 print(vc)
@@ -108,8 +122,18 @@ For numeric/meta columns, run a 2-sample KS test or compare quantiles; flag if p
 ## STEP 5 — Leakage Probes (specific to AI Agent Action Decision)
 
 1. Does `history` ever literally contain the next action label? (If so: the generation method leaks.)
-2. Is there a `session_id` (or equivalent)? If yes, count how many test rows share session with train rows. If > 0, GroupKFold is mandatory for honest CV.
-3. Is `session_meta.remaining_tokens` strongly correlated with target? Could be informative or leakage depending on data construction.
+2. **Session grouping (KNOWN — verify, don't re-derive wrong):** the session id is
+   `id.rsplit("-step",1)[0]`. 9,429 sessions span 70,000 rows (99.69% multi-step),
+   so same-session steps share workspace/meta + overlapping history prefixes.
+   **`StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)` grouped by
+   session is MANDATORY**; plain KFold/StratifiedKFold leaks session context and
+   inflates CV. Report rows-per-session distribution to keep this front-of-mind.
+   ```python
+   sid = train['id'].str.rsplit('-step', n=1).str[0]
+   print("sessions:", sid.nunique(), " rows:", len(train),
+         " multi-step %:", round(100*(sid.value_counts()>1).reindex(sid).mean(),2))
+   ```
+3. Is `session_meta.budget_tokens_remaining` strongly correlated with target? Could be informative or leakage depending on data construction (EDA found it near-noise).
 
 ## STEP 6 — Inference-Budget Forecast
 

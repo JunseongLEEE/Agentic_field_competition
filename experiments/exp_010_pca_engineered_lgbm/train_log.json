@@ -1,0 +1,40 @@
+{
+  "experiment_id": "exp_010_pca_engineered_lgbm",
+  "metric": "macro_f1",
+  "cv_strategy": "StratifiedGroupKFold(5,group=session,seed=42)",
+  "cv_fold_scores": [
+    0.680538270650028,
+    0.6817992919396862,
+    0.6829169699903784,
+    0.6898272111394556,
+    0.6807815960182092
+  ],
+  "cv_mean": 0.6831726679475515,
+  "cv_std": 0.003431960439448177,
+  "per_class_f1": {
+    "read_file": 0.5167514287212289,
+    "grep_search": 0.5595601099725068,
+    "list_directory": 0.38487815987246643,
+    "glob_pattern": 0.578058212904539,
+    "edit_file": 0.913140510623103,
+    "write_file": 0.9680886798790729,
+    "apply_patch": 0.8515400614043775,
+    "run_bash": 0.7490501899620076,
+    "run_tests": 0.73332630913497,
+    "lint_or_typecheck": 0.570738773539353,
+    "ask_user": 0.5830355463607297,
+    "plan_task": 0.6068052930056711,
+    "web_search": 0.5531914893617021,
+    "respond_only": 0.9974850067711356
+  },
+  "worst_class": "list_directory",
+  "collapsed_classes": [],
+  "inference_ms_per_sample": 0.569,
+  "estimated_full_test_minutes": 0.28,
+  "model_size_mb": 532.8,
+  "n_features": 25065,
+  "n_dense_features": 65,
+  "offline_compatible": true,
+  "seed": 42,
+  "note": "PCA-filtered + 25 new engineered features (bigram/trigram/intent/phase/ratios)"
+}

@@ -28,6 +28,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--exp", required=True, help="experiment name")
     ap.add_argument("--lb", type=float, default=None, help="leaderboard score")
+    ap.add_argument("--cv", type=float, default=None,
+                    help="CV macro-F1 (default: read cv_mean from experiments/<exp>/train_log.json)")
     ap.add_argument(
         "--status",
         choices=["success", "install_error", "runtime_error"],
@@ -42,11 +44,24 @@ def main():
     with open(META_PATH) as f:
         meta = yaml.safe_load(f)
 
+    # cv_score is REQUIRED for the CV->LB correlation model to form (cv, lb) pairs.
+    # Prefer --cv; otherwise read cv_mean from the experiment's train_log.json.
+    cv_score = args.cv
+    if cv_score is None:
+        import json
+        tl = ROOT / "experiments" / args.exp / "train_log.json"
+        if tl.exists():
+            try:
+                cv_score = float(json.load(open(tl)).get("cv_mean"))
+            except Exception:
+                cv_score = None
+
     now = datetime.now(KST)
     entry = {
         "date": now.date().isoformat(),
         "timestamp": now.isoformat(),
         "experiment": args.exp,
+        "cv_score": cv_score,
         "lb_score": args.lb,
         "status": args.status,
         # install_error does NOT count against daily limit per DACON rules
@@ -65,7 +80,7 @@ def main():
     today_count = sum(
         1 for s in log if s.get("date") == today and s.get("counts_against_daily", True)
     )
-    limit = meta.get("limits", {}).get("daily_submission_limit", 10)
+    limit = meta.get("limits", {}).get("daily_submission_limit", 20)
     remaining = max(0, limit - today_count)
 
     print(f"✓ Recorded submission: {args.exp} ({args.status})")

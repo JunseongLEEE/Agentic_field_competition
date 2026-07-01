@@ -1,0 +1,39 @@
+{
+  "experiment_id": "exp_005_graphcodebert",
+  "metric": "macro_f1",
+  "cv_strategy": "StratifiedGroupKFold(5, group=session, seed=42)",
+  "cv_fold_scores": [
+    0.6319839858969794,
+    0.6214318266498614,
+    0.625474915550236,
+    0.6282111032228942,
+    0.6300146632548309
+  ],
+  "cv_mean": 0.6274232989149604,
+  "cv_std": 0.0036831944873137977,
+  "per_class_f1": {
+    "read_file": 0.4933374020954125,
+    "grep_search": 0.5440031536414703,
+    "list_directory": 0.36338672768878716,
+    "glob_pattern": 0.5631230979116382,
+    "edit_file": 0.8705123736493552,
+    "write_file": 0.9311683727497353,
+    "apply_patch": 0.7919992306952591,
+    "run_bash": 0.7184207834714125,
+    "run_tests": 0.6863769327204347,
+    "lint_or_typecheck": 0.47157453497511137,
+    "ask_user": 0.5057650967363689,
+    "plan_task": 0.5351787773933102,
+    "web_search": 0.3177570093457944,
+    "respond_only": 0.9929036648196753
+  },
+  "worst_class": "web_search",
+  "best_class": "respond_only",
+  "collapsed_classes": [],
+  "runtime_seconds_train": 2078.4,
+  "n_features": 804,
+  "seed": 42,
+  "embed_dim": 768,
+  "encoder_hf_id": "microsoft/graphcodebert-base",
+  "encoder_disk_size_mb": 954.1
+}

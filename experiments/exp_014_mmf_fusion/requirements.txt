@@ -1,0 +1,4 @@
+# torch is preinstalled on the DACON GPU eval server — do NOT pin (huge).
+# numpy / scipy / pandas / scikit-learn: rely on server defaults (ABI-safe, no pin).
+transformers==4.44.2
+sentencepiece

@@ -1,0 +1,51 @@
+experiment_id: exp_015_mdeberta_base_e2e
+description: >
+  End-to-end mDeBERTa-v3-base with rich context input (CTX+HIST+NOW).
+  Replaces exp_011 2-stage pipeline. Focal loss + logit adjustment.
+  No LightGBM stacking.
+
+hypothesis: >
+  Packing turn/workspace/history/action-sequence into DeBERTa input with
+  mdeberta-v3-base (multilingual) at max_len=384 should beat exp_011 (0.657)
+  and approach exp_010 (0.684) by letting the encoder use bidirectional
+  attention over full session context instead of duplicating last_action.
+
+model:
+  name: microsoft/mdeberta-v3-base
+  max_length: 384
+  n_classes: 14
+  dropout: 0.1
+
+training:
+  batch_size: 16
+  grad_accum: 4
+  lr: 2.0e-5
+  epochs: 4
+  warmup_ratio: 0.06
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  focal_gamma: 2.0
+  logit_adjust_tau: 1.0
+  num_workers: 4
+  use_amp: true
+  gradient_checkpointing: true
+
+inference:
+  batch_size: 64
+  use_fp16: true
+
+cv:
+  strategy: StratifiedGroupKFold
+  n_splits: 5
+  group: session_id
+  seed: 42
+
+data:
+  train_path: ../../data/train.jsonl
+  train_labels_path: ../../data/train_labels.csv
+  test_path: ../../data/test.jsonl
+  user_content_max: 80
+  history_window: 8
+  arg_hint_max: 40
+
+seed: 42

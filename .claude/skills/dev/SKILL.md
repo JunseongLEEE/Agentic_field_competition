@@ -15,7 +15,7 @@ allowed-tools:
 
 You implement experiments for **14-class AI Agent Action Decision** (Macro-F1).
 Each experiment produces TWO scripts:
-- `train.py` — local training + 5-fold stratified CV (never submitted)
+- `train.py` — local training + 5-fold StratifiedGroupKFold CV grouped by session (never submitted)
 - `script.py` — DACON server inference only (this is what goes into submit.zip)
 
 ## Arguments
@@ -82,17 +82,23 @@ experiment:
   git_commit: <commit short hash>
 
 data:
-  train_path: ../../data/train.csv
-  test_path: ../../data/test.csv
-  sample_submission_path: ../../data/sample_submission.csv
-  target_col: <from data_docs/dataset_overview.md>
+  # Data is JSONL (NOT csv). train.jsonl (70,000 rows; keys id, session_meta,
+  # history, current_prompt) is joined by `id` to train_labels.csv (id,action).
+  # test.jsonl in the repo is a 5-row SAMPLE; the real server test is 30,000 hidden rows.
+  train_path: ../../data/train.jsonl
+  train_labels_path: ../../data/train_labels.csv
+  test_path: ../../data/test.jsonl
+  sample_submission_path: ../../data/sample_submission.csv   # stays CSV, cols: id,action
+  target_col: action                  # 14 snake_case STRING class names (NOT int 0-13)
   text_cols: [current_prompt]
   history_col: history
   meta_cols: [<session_meta columns>]
 
 cv:
   n_splits: 5
-  strategy: stratified                # stratified by 14-class target
+  strategy: stratified_group          # StratifiedGroupKFold, group = session id
+  group_key: session                  # session id = id.rsplit("-step",1)[0]
+  shuffle: true
   seed: 42
 
 model:
@@ -119,19 +125,69 @@ output:
 
 ## STEP 3 — Implement train.py
 
+**Live logging (MANDATORY):** at the very top of `train.py`, install a
+line-buffered Tee so every print streams to the standard live-log path
+`experiments/<exp>/train.log` in REAL TIME (watchable via `tail -f`), regardless
+of how the script is launched (foreground, background, agent). Also pass
+`flush=True` on prints as belt-and-suspenders.
+```python
+import sys, os
+ROOT = os.path.dirname(os.path.abspath(__file__))
+_logf = open(os.path.join(ROOT, "train.log"), "a", buffering=1)  # line-buffered = real-time
+class _Tee:
+    def __init__(self, *streams): self.streams = streams
+    def write(self, d):
+        for s in self.streams:
+            s.write(d); s.flush()
+    def flush(self):
+        for s in self.streams: s.flush()
+sys.stdout = sys.stderr = _Tee(sys.__stdout__, _logf)
+```
+
 Required behavior:
 1. Load `config.yaml` (no hardcoded params).
 2. Set seeds: `numpy`, `random`, `torch` if used, `os.environ['PYTHONHASHSEED']`.
-3. Run 5-fold `StratifiedKFold(n_splits=5, shuffle=True, random_state=cv.seed)` on the 14-class target.
-4. Per fold: fit, predict OOF probabilities (shape `(n_fold_val, 14)`).
-5. Compute `f1_score(y, oof_preds.argmax(axis=1), average='macro')` per fold AND aggregate.
-6. Compute per-class F1 on aggregated OOF predictions.
-7. After CV: retrain on full train, save final weights to `model/`.
-8. Predict test → save `test_preds.npy` (avg of folds OR final retrain — declare which in config).
-9. Time the inference: `inference_ms_per_sample` on a 1000-row sample.
-10. Measure `model_size_mb` = `du -sb model/`.
-11. Run `scripts/validate_submission.py` against `script.py` for early offline check.
-12. Write `train_log.json`.
+3. Load data from JSONL (NOT csv). Reuse the loaders in
+   `experiments/exp_001_tfidf_lightgbm/features.py`: `load_jsonl(path)` +
+   `build_records(samples)`. Join `train.jsonl` to `train_labels.csv` on `id`.
+   The target `action` is one of 14 snake_case STRINGS (see CLASS_ORDER in that
+   features.py) — never assume integer 0-13 labels.
+4. Run 5-fold `StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=cv.seed)`
+   stratified on the 14-class target and **grouped by session id**
+   (`group = id.rsplit("-step",1)[0]`). This is mandatory: 9,429 sessions span
+   70,000 rows (99.69% multi-step), so plain KFold/StratifiedKFold leaks session
+   context and inflates CV. Assert zero group overlap between train/val each fold:
+   ```python
+   for tr, va in sgkf.split(X, y, groups):
+       assert set(groups[tr]).isdisjoint(set(groups[va])), "session leak across fold"
+   ```
+5. Per fold: fit, predict OOF probabilities (shape `(n_fold_val, 14)`).
+6. Compute `f1_score(y, oof_preds.argmax(axis=1), average='macro')` per fold AND aggregate.
+7. Compute per-class F1 on aggregated OOF predictions.
+8. After CV: retrain on full train, save final weights to `model/`.
+9. Predict test → save `test_preds.npy` (avg of folds OR final retrain — declare which in config).
+10. Time the inference: `inference_ms_per_sample` on a 1000-row sample.
+11. Measure `model_size_mb` = `du -sb model/`.
+12. Run `scripts/validate_submission.py` against `script.py` for early offline check.
+13. Write `train_log.json`.
+
+**Compute-hygiene rules (these bit us — enforce):**
+- **Rule A (foreground/wait):** run `train.py` in the FOREGROUND and WAIT for it
+  to finish. NEVER launch training as a background job and return/exit — that
+  leaves orphaned trainings and skips downstream steps (packaging). The task is
+  complete only when `train_log.json` (and, when packing, the zip) actually exist.
+- **Rule B (thread cap):** this box has 128 cores. `n_jobs=-1` /
+  `num_threads` / `thread_count` on LightGBM/XGBoost/CatBoost causes thread
+  oversubscription and thrash (jobs hang for tens of minutes). Set
+  `n_jobs`/`num_threads`/`thread_count` ≤ 16 and run heavy trainings SEQUENTIALLY
+  (at most 2 in parallel), never a fan-out of full-core jobs.
+- **Rule C (char TF-IDF stall):** `char_wb` TfidfVectorizer with wide char
+  n-grams (e.g. `(2,4)`) on the full 70k corpus is SINGLE-THREADED and stalls for
+  many minutes building the vocabulary. If char features are used, cap
+  `max_features` low AND raise `min_df`, or prefer word n-grams. Structured
+  features (last_action, turn_index, rule flags) dominate MI, so char is optional.
+- **GPU:** train on the local GPU (RTX 3090 24GB) when the model supports it
+  (e.g. LightGBM `device=gpu`, torch `.cuda()`); keep CPU thread caps per Rule B.
 
 Required `train_log.json` schema:
 ```json
@@ -168,15 +224,16 @@ Strict rules:
 - No training, no fitting, no scaler/encoder fitting — load fitted artifacts from `model/`.
 - Inference time ≤ 10 minutes on T4 (3 vCPU, 12GB RAM).
 
-Skeleton:
+Skeleton (test input is JSONL; submission stays CSV with STRING `action` labels):
 ```python
 import os
 import pandas as pd
 # Only offline-safe imports
+from features import load_jsonl, build_records, CLASS_ORDER  # features.py IS in the zip
 
 MODEL_DIR = 'model'
-DATA_PATH = os.path.join('data', 'test.csv')
-SAMPLE_SUB_PATH = os.path.join('data', 'sample_submission.csv')
+DATA_PATH = os.path.join('data', 'test.jsonl')             # JSONL, NOT csv
+SAMPLE_SUB_PATH = os.path.join('data', 'sample_submission.csv')  # sample stays CSV
 OUTPUT_PATH = os.path.join('output', 'submission.csv')
 
 
@@ -185,37 +242,40 @@ def load_artifacts():
     ...
 
 
-def preprocess(df, artifacts):
-    # MUST mirror train.py preprocessing exactly
+def preprocess(samples, artifacts):
+    # MUST mirror train.py preprocessing exactly (use build_records from features.py)
     ...
 
 
 def predict(features, artifacts):
-    proba = artifacts['model'].predict_proba(features)  # (M, 14)
-    return proba.argmax(axis=1)
+    proba = artifacts['model'].predict_proba(features)      # (M, 14)
+    idx = proba.argmax(axis=1)
+    return [CLASS_ORDER[i] for i in idx]                    # map to STRING class names
 
 
-def write_submission(test_df, preds):
+def write_submission(ids, preds):
     os.makedirs('output', exist_ok=True)
-    sample = pd.read_csv(SAMPLE_SUB_PATH)
-    out = sample.copy()
-    out.iloc[:, 1] = preds                              # second column is the label
+    # 14 exact snake_case strings, e.g. read_file / run_bash / respond_only — NOT ints
+    out = pd.DataFrame({'id': ids, 'action': preds})
     out.to_csv(OUTPUT_PATH, index=False)
 
 
 if __name__ == '__main__':
     artifacts = load_artifacts()
-    test_df = pd.read_csv(DATA_PATH)
-    features = preprocess(test_df, artifacts)
+    samples = load_jsonl(DATA_PATH)
+    ids, prompts, records = build_records(samples)
+    features = preprocess((prompts, records), artifacts)
     preds = predict(features, artifacts)
-    write_submission(test_df, preds)
+    write_submission(ids, preds)
     print('inference done')
 ```
 
 ## STEP 5 — requirements.txt
 
 - List ONLY packages the DACON image lacks.
-- Pin exact versions for reproducibility.
+- **NEVER pin `numpy` / `scipy` / `pandas` / `joblib`.** Pinning the base scientific stack over the server's consistent one causes an ABI crash at import (`ValueError: numpy.dtype size changed, Expected 96 ... got 88`). Pin ONLY the estimator libs whose pickles must load: `scikit-learn==<training version>` + the model lib (e.g. `lightgbm==4.6.0`); let numpy/scipy/joblib come transitively from the server. See [[requirements-never-pin-numpy-scipy]].
+- Pin `scikit-learn` to a version that installs on the server's Python (3.11+) AND matches the pickle you trained (e.g. 1.5.1). Prefer stdlib `csv`/`json` over `pandas` in script.py to drop a C-extension.
+- **Validate the requirements in a CLEAN venv** before packaging (`python -m venv`; `pip install` ONLY the requirements; run script.py on data/test.jsonl). The training-env dry-run does NOT catch ABI/pin conflicts.
 - Avoid heavy installs (CUDA torch builds, transformers full) unless absolutely required — they risk the 10-minute install budget.
 
 ## STEP 6 — SUMMARY.md
@@ -260,7 +320,12 @@ Next: /run exp_NNN_name
 
 - DO NOT execute the experiment — `/run` does that.
 - DO NOT skip the offline scan.
-- DO NOT use random KFold — use StratifiedKFold on the 14-class target.
+- DO NOT use random KFold or plain StratifiedKFold — use `StratifiedGroupKFold` grouped by session id (`id.rsplit("-step",1)[0]`) with the zero-overlap assert.
 - DO NOT fit any transformer in `script.py`. All preprocessing artifacts must come from `model/`.
 - DO NOT load weights via absolute paths.
 - DO NOT exceed 800MB in `model/` (leave ≥200MB headroom under the 1GB zip cap).
+- ENSURE `script.py` imports `features.py` and that packaging ships it: the zip
+  must contain `model/ + script.py + requirements.txt + features.py`. Packaging is
+  done by `scripts/package_submit.py` (pure-Python zipfile — the `zip`/`unzip`/
+  `shasum` CLIs are NOT installed), which writes `submissions/<exp>.zip` +
+  `<exp>_meta.json` and already includes features.py.

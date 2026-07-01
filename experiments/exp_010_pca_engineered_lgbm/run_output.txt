@@ -1,0 +1,15 @@
+loaded 70000 rows, 9429 sessions
+dense features: 65
+fold0 macroF1=0.6805 (1252s)
+fold1 macroF1=0.6818 (2457s)
+fold2 macroF1=0.6829 (3632s)
+fold3 macroF1=0.6898 (4810s)
+fold4 macroF1=0.6808 (5567s)
+
+CV macroF1 = 0.6832 +/- 0.0034
+per-class F1: {"read_file": 0.5168, "grep_search": 0.5596, "list_directory": 0.3849, "glob_pattern": 0.5781, "edit_file": 0.9131, "write_file": 0.9681, "apply_patch": 0.8515, "run_bash": 0.7491, "run_tests": 0.7333, "lint_or_typecheck": 0.5707, "ask_user": 0.583, "plan_task": 0.6068, "web_search": 0.5532, "respond_only": 0.9975}
+worst: list_directory (0.3849)
+
+full-train ...
+
+DONE cv=0.6832+/-0.0034 infer=0.6ms/sample model=532.8MB n_feat=25065

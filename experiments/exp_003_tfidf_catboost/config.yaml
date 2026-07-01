@@ -1,0 +1,60 @@
+experiment:
+  id: exp_003_tfidf_catboost
+  hypothesis: "Same domain-informed TF-IDF + sequential + rule + meta feature pipeline as exp_001, with CatBoost multiclass and balanced sample weights, on Macro-F1"
+  expected_macro_f1: 0.55
+  verification_protocol:
+    accept_if: "CV Macro-F1 > 0.45 with no collapsed classes (F1<0.05)"
+    reject_if: "CV Macro-F1 < 0.35 or >=3 collapsed classes"
+  created: "2026-07-01"
+  git_commit: "unknown"
+
+data:
+  train_path: ../../data/train.jsonl
+  train_labels_path: ../../data/train_labels.csv
+  test_path: ../../data/test.jsonl
+  sample_submission_path: ../../data/sample_submission.csv
+  target_col: action
+  id_col: id
+  text_cols: [current_prompt]
+  history_col: history
+
+cv:
+  n_splits: 5
+  strategy: stratified
+  seed: 42
+
+model:
+  type: catboost
+  num_class: 14
+  objective: MultiClass
+  class_weight: balanced
+  test_pred_source: full_retrain
+  params:
+    iterations: 600
+    learning_rate: 0.1
+    depth: 6
+    l2_leaf_reg: 3.0
+    rsm: 0.1
+    border_count: 128
+    early_stopping_rounds: 50
+    thread_count: -1
+
+features:
+  tfidf:
+    word:
+      analyzer: word
+      ngram_range: [1, 2]
+      max_features: 30000
+      min_df: 2
+    char:
+      analyzer: char_wb
+      ngram_range: [2, 4]
+      max_features: 20000
+      min_df: 2
+
+output:
+  oof_predictions: oof_preds.npy
+  test_predictions: test_preds.npy
+  weights_dir: model/
+  per_fold_dir: models/
+  log_file: train_log.json

@@ -1,0 +1,125 @@
+Loaded 70000 samples
+Class weights: ['0.54', '0.50', '1.16', '0.95', '0.45', '3.38', '1.04', '0.99', '1.10', '2.19', '1.85', '1.87', '3.93', '0.97']
+
+============================================================
+STAGE 1: DeBERTa-v3-small fine-tuning
+============================================================
+/usr/local/lib/python3.10/dist-packages/transformers/tokenization_utils_base.py:1601: FutureWarning: `clean_up_tokenization_spaces` was not set. It will be set to `True` by default. This behavior will be depracted in transformers v4.45, and will be then set to `False` by default. For more details check this issue: https://github.com/huggingface/transformers/issues/31884
+  warnings.warn(
+/usr/local/lib/python3.10/dist-packages/transformers/convert_slow_tokenizer.py:551: UserWarning: The sentencepiece tokenizer that you are converting to a fast tokenizer uses the byte fallback option which is not implemented in the fast tokenizers. In practice this means that the fast version of the tokenizer can produce unknown tokens whereas the sentencepiece version would have converted these unknown tokens into a sequence of byte tokens matching the original piece of text.
+  warnings.warn(
+
+--- DeBERTa Fold 0 (train=55716, val=14284) ---
+Some weights of DebertaV2ForSequenceClassification were not initialized from the model checkpoint at microsoft/deberta-v3-small and are newly initialized: ['classifier.bias', 'classifier.weight', 'pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+  fold0 epoch0 loss=1.5874 val_macroF1=0.4697
+  fold0 epoch1 loss=0.9800 val_macroF1=0.5475
+  fold0 epoch2 loss=0.9192 val_macroF1=0.5461
+  fold0 epoch3 loss=0.8893 val_macroF1=0.5663
+  fold0 epoch4 loss=0.8734 val_macroF1=0.5720
+  fold0 best macroF1=0.5720 (968s)
+
+--- DeBERTa Fold 1 (train=56048, val=13952) ---
+Some weights of DebertaV2ForSequenceClassification were not initialized from the model checkpoint at microsoft/deberta-v3-small and are newly initialized: ['classifier.bias', 'classifier.weight', 'pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+  fold1 epoch0 loss=1.5820 val_macroF1=0.4882
+  fold1 epoch1 loss=0.9918 val_macroF1=0.5216
+  fold1 epoch2 loss=0.9247 val_macroF1=0.5433
+  fold1 epoch3 loss=0.8905 val_macroF1=0.5653
+  fold1 epoch4 loss=0.8750 val_macroF1=0.5679
+  fold1 best macroF1=0.5679 (1935s)
+
+--- DeBERTa Fold 2 (train=56012, val=13988) ---
+Some weights of DebertaV2ForSequenceClassification were not initialized from the model checkpoint at microsoft/deberta-v3-small and are newly initialized: ['classifier.bias', 'classifier.weight', 'pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+  fold2 epoch0 loss=1.5838 val_macroF1=0.4536
+  fold2 epoch1 loss=0.9953 val_macroF1=0.4942
+  fold2 epoch2 loss=0.9250 val_macroF1=0.5526
+  fold2 epoch3 loss=0.8888 val_macroF1=0.5542
+  fold2 epoch4 loss=0.8680 val_macroF1=0.5540
+  fold2 best macroF1=0.5542 (2900s)
+
+--- DeBERTa Fold 3 (train=56083, val=13917) ---
+Some weights of DebertaV2ForSequenceClassification were not initialized from the model checkpoint at microsoft/deberta-v3-small and are newly initialized: ['classifier.bias', 'classifier.weight', 'pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+  fold3 epoch0 loss=1.5889 val_macroF1=0.4401
+  fold3 epoch1 loss=0.9856 val_macroF1=0.5300
+  fold3 epoch2 loss=0.9219 val_macroF1=0.5452
+  fold3 epoch3 loss=0.8875 val_macroF1=0.5619
+  fold3 epoch4 loss=0.8712 val_macroF1=0.5596
+  fold3 best macroF1=0.5619 (3866s)
+
+--- DeBERTa Fold 4 (train=56141, val=13859) ---
+Some weights of DebertaV2ForSequenceClassification were not initialized from the model checkpoint at microsoft/deberta-v3-small and are newly initialized: ['classifier.bias', 'classifier.weight', 'pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+  fold4 epoch0 loss=1.6138 val_macroF1=0.4399
+  fold4 epoch1 loss=1.0017 val_macroF1=0.5296
+  fold4 epoch2 loss=0.9315 val_macroF1=0.5546
+  fold4 epoch3 loss=0.8941 val_macroF1=0.5598
+  fold4 epoch4 loss=0.8785 val_macroF1=0.5589
+  fold4 best macroF1=0.5598 (4833s)
+
+DeBERTa OOF macroF1 = 0.5638
+  read_file            F1=0.2891
+  grep_search          F1=0.3345
+  list_directory       F1=0.4073
+  glob_pattern         F1=0.3043
+  edit_file            F1=0.7855
+  write_file           F1=0.9785
+  apply_patch          F1=0.5528
+  run_bash             F1=0.7217
+  run_tests            F1=0.6010
+  lint_or_typecheck    F1=0.4475
+  ask_user             F1=0.4960
+  plan_task            F1=0.5579
+  web_search           F1=0.4184
+  respond_only         F1=0.9986
+
+============================================================
+STAGE 2: LightGBM on DeBERTa OOF + 7 features
+============================================================
+LightGBM features: 21 (['deberta_prob_0', 'deberta_prob_1', 'deberta_prob_2', 'deberta_prob_3', 'deberta_prob_4', 'deberta_prob_5', 'deberta_prob_6', 'deberta_prob_7', 'deberta_prob_8', 'deberta_prob_9', 'deberta_prob_10', 'deberta_prob_11', 'deberta_prob_12', 'deberta_prob_13', 'action_bigram', 'action_trigram', 'turn_action', 'last_action_status', 'last_action', 'second_last_action', 'prompt_intent'])
+  LightGBM fold 0 ...
+  fold0 macroF1=0.6637
+  LightGBM fold 1 ...
+  fold1 macroF1=0.6556
+  LightGBM fold 2 ...
+  fold2 macroF1=0.6432
+  LightGBM fold 3 ...
+  fold3 macroF1=0.6525
+  LightGBM fold 4 ...
+  fold4 macroF1=0.6665
+
+Final 2-Stage OOF macroF1 = 0.6571
+  read_file            DeBERTa=0.2891 → Final=0.5062 (+0.2171)
+  grep_search          DeBERTa=0.3345 → Final=0.5866 (+0.2521)
+  list_directory       DeBERTa=0.4073 → Final=0.4186 (+0.0113)
+  glob_pattern         DeBERTa=0.3043 → Final=0.5950 (+0.2908)
+  edit_file            DeBERTa=0.7855 → Final=0.8908 (+0.1053)
+  write_file           DeBERTa=0.9785 → Final=0.9852 (+0.0067)
+  apply_patch          DeBERTa=0.5528 → Final=0.7495 (+0.1967)
+  run_bash             DeBERTa=0.7217 → Final=0.7436 (+0.0219)
+  run_tests            DeBERTa=0.6010 → Final=0.6481 (+0.0471)
+  lint_or_typecheck    DeBERTa=0.4475 → Final=0.4694 (+0.0219)
+  ask_user             DeBERTa=0.4960 → Final=0.5450 (+0.0490)
+  plan_task            DeBERTa=0.5579 → Final=0.6150 (+0.0571)
+  web_search           DeBERTa=0.4184 → Final=0.4476 (+0.0292)
+  respond_only         DeBERTa=0.9986 → Final=0.9988 (+0.0002)
+
+============================================================
+FULL-TRAIN for submission
+============================================================
+Training DeBERTa on full data...
+Some weights of DebertaV2ForSequenceClassification were not initialized from the model checkpoint at microsoft/deberta-v3-small and are newly initialized: ['classifier.bias', 'classifier.weight', 'pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+  full-train epoch0 loss=1.5113
+  full-train epoch1 loss=0.9651
+  full-train epoch2 loss=0.9098
+  full-train epoch3 loss=0.8811
+  full-train epoch4 loss=0.8695
+Getting full-train DeBERTa predictions...
+
+DONE in 6226s
+  Stage1 DeBERTa OOF macroF1 = 0.5638
+  Stage2 Final OOF macroF1   = 0.6571
+  Model size: 576.3 MB

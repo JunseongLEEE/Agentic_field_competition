@@ -1,0 +1,23 @@
+folds OK (StratifiedGroupKFold, 9429 sessions)
+=== exp_004_codebert: cached emb (70000, 768) ===
+  [exp_004_codebert] fold0 macroF1=0.6312  (409s)
+  [exp_004_codebert] fold1 macroF1=0.6226  (814s)
+  [exp_004_codebert] fold2 macroF1=0.6179  (1219s)
+  [exp_004_codebert] fold3 macroF1=0.6213  (1623s)
+  [exp_004_codebert] fold4 macroF1=0.6234  (2037s)
+  [exp_004_codebert] DONE cv=0.6233±0.0044 worst=web_search(0.33) collapsed=[]
+=== exp_005_graphcodebert: cached emb (70000, 768) ===
+  [exp_005_graphcodebert] fold0 macroF1=0.6320  (413s)
+  [exp_005_graphcodebert] fold1 macroF1=0.6214  (829s)
+  [exp_005_graphcodebert] fold2 macroF1=0.6255  (1250s)
+  [exp_005_graphcodebert] fold3 macroF1=0.6282  (1663s)
+  [exp_005_graphcodebert] fold4 macroF1=0.6300  (2078s)
+  [exp_005_graphcodebert] DONE cv=0.6274±0.0037 worst=web_search(0.32) collapsed=[]
+=== exp_006_deberta_v3_small: extracting emb (microsoft/deberta-v3-small) ===
+/usr/local/lib/python3.10/dist-packages/transformers/tokenization_utils_base.py:1601: FutureWarning: `clean_up_tokenization_spaces` was not set. It will be set to `True` by default. This behavior will be depracted in transformers v4.45, and will be then set to `False` by default. For more details check this issue: https://github.com/huggingface/transformers/issues/31884
+  warnings.warn(
+/usr/local/lib/python3.10/dist-packages/transformers/convert_slow_tokenizer.py:551: UserWarning: The sentencepiece tokenizer that you are converting to a fast tokenizer uses the byte fallback option which is not implemented in the fast tokenizers. In practice this means that the fast version of the tokenizer can produce unknown tokens whereas the sentencepiece version would have converted these unknown tokens into a sequence of byte tokens matching the original piece of text.
+  warnings.warn(
+  [exp_006_deberta_v3_small] fold0 macroF1=0.6369  (427s)
+  [exp_006_deberta_v3_small] fold1 macroF1=0.6314  (854s)
+  [exp_006_deberta_v3_small] fold2 macroF1=0.6358  (1278s)

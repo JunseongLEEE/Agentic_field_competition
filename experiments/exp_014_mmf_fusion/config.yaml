@@ -1,0 +1,48 @@
+experiment_id: exp_014_mmf_fusion
+description: >
+  Multi-Modal Fusion Net. 3 towers trained end-to-end on GPU:
+  (1) mdeberta-v3-base text encoder (tagged prompt + last user msg),
+  (2) history-trajectory TransformerEncoder over the ordered action/user step
+  sequence (the novel signal), (3) tabular embedding MLP reusing exp_010 features.
+  Fusion -> LayerNorm -> MLP -> 14 logits. Logit-adjusted loss for Macro-F1.
+  Value = trajectory modeling + a decorrelated model to ensemble with exp_010 GBDT.
+
+seed: 42
+metric: macro_f1
+
+encoder_id: microsoft/mdeberta-v3-base
+max_text_len: 96
+max_seq_len: 16
+
+cv:
+  strategy: StratifiedGroupKFold
+  n_splits: 5
+  shuffle: true
+  random_state: 42
+  group: session_id  # id.rsplit("-step",1)[0]
+
+training:
+  epochs: 3
+  batch_size: 32
+  infer_batch: 64
+  lr_encoder: 2.0e-5
+  lr_towers_head: 1.0e-3
+  weight_decay: 0.01
+  amp: fp16
+  loss: logit_adjusted_softmax
+  tau: 1.0
+  label_smoothing: 0.05
+  early_stop: val_macro_f1 (patience 1)
+
+towers:
+  text_dim: 256
+  seq: {d_model: 128, heads: 4, layers: 2}
+  tab_dim: 128
+  fusion: [512, 256]
+  dropout: 0.2
+
+calibration: per_class_prob_multipliers_coordinate_ascent_on_oof
+
+deliverables:
+  oof: oof_preds.npy   # (70000,14) for ensembling with exp_010
+  model_dir: model/    # fp16 encoder + towers + tokenizer + calibration + config

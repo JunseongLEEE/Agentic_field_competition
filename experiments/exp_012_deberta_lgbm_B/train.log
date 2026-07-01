@@ -1,0 +1,28 @@
+Loaded 70000 samples
+Class weights: ['0.54', '0.50', '1.16', '0.95', '0.45', '3.38', '1.04', '0.99', '1.10', '2.19', '1.85', '1.87', '3.93', '0.97']
+
+============================================================
+STAGE 1: DeBERTa-v3-small fine-tuning
+============================================================
+/usr/local/lib/python3.10/dist-packages/transformers/tokenization_utils_base.py:1601: FutureWarning: `clean_up_tokenization_spaces` was not set. It will be set to `True` by default. This behavior will be depracted in transformers v4.45, and will be then set to `False` by default. For more details check this issue: https://github.com/huggingface/transformers/issues/31884
+  warnings.warn(
+/usr/local/lib/python3.10/dist-packages/transformers/convert_slow_tokenizer.py:551: UserWarning: The sentencepiece tokenizer that you are converting to a fast tokenizer uses the byte fallback option which is not implemented in the fast tokenizers. In practice this means that the fast version of the tokenizer can produce unknown tokens whereas the sentencepiece version would have converted these unknown tokens into a sequence of byte tokens matching the original piece of text.
+  warnings.warn(
+
+--- DeBERTa Fold 0 (train=55716, val=14284) ---
+Some weights of DebertaV2ForSequenceClassification were not initialized from the model checkpoint at microsoft/deberta-v3-small and are newly initialized: ['classifier.bias', 'classifier.weight', 'pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+  fold0 epoch0 loss=1.6437 val_macroF1=0.3233
+  fold0 epoch1 loss=1.0734 val_macroF1=0.3489
+  fold0 epoch2 loss=1.0225 val_macroF1=0.3885
+  fold0 epoch3 loss=0.9983 val_macroF1=0.3977
+  fold0 epoch4 loss=0.9852 val_macroF1=0.4340
+  fold0 best macroF1=0.4340 (965s)
+
+--- DeBERTa Fold 1 (train=56048, val=13952) ---
+Some weights of DebertaV2ForSequenceClassification were not initialized from the model checkpoint at microsoft/deberta-v3-small and are newly initialized: ['classifier.bias', 'classifier.weight', 'pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+  fold1 epoch0 loss=1.5990 val_macroF1=0.3298
+  fold1 epoch1 loss=1.0755 val_macroF1=0.3364
+  fold1 epoch2 loss=1.0239 val_macroF1=0.3353
+  fold1 epoch3 loss=0.9957 val_macroF1=0.4202

@@ -1,0 +1,4 @@
+folds OK (StratifiedGroupKFold, 9429 sessions)
+=== GBDT track: building tfidf + dense ===
+  GBDT X shape (70000, 30036)
+  [exp_001_tfidf_lightgbm] fold0 macroF1=0.6743  (3749s)

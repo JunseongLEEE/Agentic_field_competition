@@ -1,0 +1,16 @@
+{
+  "experiment_id": "exp_011_deberta_lgbm_A",
+  "cv_score": 0.6562959725823403,
+  "inference_ms_per_sample": 0.042,
+  "model_size_mb": 576.34,
+  "git_commit": "34697b2",
+  "sha256": "6c302f4f7bbbcbb1530c4f3f329fe8e1482b28ee6a18d79633196d0025ed85bc",
+  "created_at": "2026-07-01T07:29:16.636299",
+  "zip_size_mb": 407.53,
+  "offline_verified": true,
+  "cv_macro_f1": 0.6571,
+  "cv_strategy": "5-fold stratified",
+  "dry_run_seconds": 3,
+  "offline_check": "PASS",
+  "estimated_inference_min": "~2-3 min for 30k rows (DeBERTa batch inference on T4)"
+}

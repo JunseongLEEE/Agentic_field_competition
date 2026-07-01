@@ -102,11 +102,23 @@ Compute and check each:
    # l1 > 0.30 → REVIEW
    ```
 
-4. **Session-level leak suspicion**:
-   if `data_docs/dataset_overview.md` says sessions have multiple rows, but config uses `StratifiedKFold` (not GroupKFold by session) → flag.
+4. **Session-level leak (HARD)**:
+   The 14-class data has 9,429 sessions over 70,000 rows (99.69% multi-step), so
+   CV MUST be `StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)`
+   grouped by session id (`id.rsplit("-step",1)[0]`). If `config.yaml` /
+   `train.py` used plain `KFold` or `StratifiedKFold` (no session grouping), or
+   the zero-overlap assert is missing → **REJECT** (CV is leaked/inflated; do not
+   trust the score). If grouping is present but unverifiable → REVIEW.
 
 5. **Generation-method leakage**:
    Grep `data_docs/generation_methodology.md` for "label" or "answer" appearing inside `history`. If found, flag.
+
+6. **Label format**:
+   The submission `action` column must be the 14 exact snake_case STRING class
+   names (read_file, grep_search, list_directory, glob_pattern, edit_file,
+   write_file, apply_patch, run_bash, run_tests, lint_or_typecheck, ask_user,
+   plan_task, web_search, respond_only) — NOT integers 0-13. Any value outside
+   this set → REJECT.
 
 ## STEP 5 — Submission Readiness
 
@@ -145,6 +157,8 @@ Decision table (apply top-down, first match wins):
 | condition | recommendation |
 |---|---|
 | any confirmed leakage flag | REJECT |
+| CV used plain KFold/StratifiedKFold (not StratifiedGroupKFold by session) | REJECT |
+| submission `action` values not in the 14 string classes (e.g. ints) | REJECT |
 | offline check FAIL | REJECT |
 | estimated full test inference > 10 min | REJECT |
 | CV worse than baseline | REJECT |

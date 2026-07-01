@@ -18,7 +18,7 @@ and extract actionable insight for the next planning cycle.
 ## Arguments
 - `$ARGUMENTS` — `<experiment_id> <lb_score> [--status success|runtime_error|install_error]`
   - default `--status success`
-  - `install_error` does NOT count against the daily 10-submission quota.
+  - `install_error` does NOT count against the daily 20-submission team quota.
   - `runtime_error` DOES count against the daily quota (and `lb_score` should be `0` or `nan`).
 
 ## STEP 0 — Parse and Validate

@@ -12,7 +12,7 @@ allowed-tools:
 # /rank — Submission Candidate Selector
 
 Pick today's submissions by **predicted LB net of uncertainty**, not by raw CV.
-Respect the 10/day DACON quota. Never auto-submit.
+Respect the 20/day DACON team quota. Never auto-submit.
 
 ## STEP 0 — Inputs
 
@@ -79,7 +79,7 @@ If none qualify and `submissions_remaining_today > 0`, recommend **HOLD** with r
 ## STEP 5 — Quota Cap
 
 ```
-remaining = max(0, 10 - submissions_today_successful_or_runtime_error)
+remaining = max(0, 20 - submissions_today_successful_or_runtime_error)
 # install_error does NOT count against quota
 top_k     = min(remaining, recommended_count)
 ```
@@ -95,7 +95,7 @@ Time-pressure adjustment:
 ```markdown
 # Submission Candidates — <YYYY-MM-DD KST>
 
-Quota: <used>/10  | Remaining today: <N>  | Days to D-day: <D>
+Quota: <used>/20  | Remaining today: <N>  | Days to D-day: <D>
 CV→LB trust: <level>  (n_pairs=<k>, residual_std=<sigma>)
 Current best LB: <0.XXXX>  (exp_NNN)
 
@@ -118,7 +118,7 @@ Priority labels:
 ═════════════════════════════════════════════
 TODAY'S RECOMMENDATIONS — <YYYY-MM-DD>
 ═════════════════════════════════════════════
-Quota          : <used>/10  remaining=<N>
+Quota          : <used>/20  remaining=<N>
 CV→LB trust    : <level>  (n=<k>, σ=<sigma>)
 Current best LB: <0.XXXX> (exp_NNN)
 D-day in       : <N> days

@@ -1,0 +1,45 @@
+experiment_id: exp_011_deberta_lgbm_A
+description: >
+  2-Stage: DeBERTa-v3-small("[last_action] [SEP] prompt") → 14-class soft-intent
+  → LightGBM with 7 structural features (MI≥0.18 only).
+  Noise reduction: last_action prefix reduces text-only noise 8.3%→1.5%.
+
+hypothesis: >
+  DeBERTa soft-intent replaces TF-IDF + rule flags with a single 14-dim vector
+  that captures text semantics. Combined with MI≥0.18 structural features only,
+  should achieve CV Macro-F1 > 0.75.
+
+stage1:
+  model: microsoft/deberta-v3-small
+  input: "[last_action] [SEP] current_prompt"
+  max_length: 128
+  epochs: 5
+  batch_size: 64
+  lr: 2e-5
+  output: 14-class OOF probability vector
+
+stage2:
+  model: lightgbm
+  features:
+    - deberta_prob_0..13 (14 dims, from stage1)
+    - action_bigram (MI=0.396)
+    - action_trigram (MI=0.426)
+    - turn_action (MI=0.304)
+    - last_action_status (MI=0.261)
+    - last_action (MI=0.252)
+    - second_last_action (MI=0.211)
+    - prompt_intent (MI=0.438)
+  dropped_below_018:
+    - ALL meta/workspace features
+    - ALL rule flags
+    - ALL cnt_* features
+    - ALL ratio features
+    - TF-IDF
+
+cv:
+  strategy: StratifiedGroupKFold
+  n_splits: 5
+  group: session_id
+  seed: 42
+
+seed: 42

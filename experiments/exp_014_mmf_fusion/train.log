@@ -1,0 +1,41 @@
+[exp_014] device=cuda encoder=microsoft/mdeberta-v3-base
+loaded 70000 rows, 9429 sessions
+/usr/local/lib/python3.10/dist-packages/transformers/tokenization_utils_base.py:1601: FutureWarning: `clean_up_tokenization_spaces` was not set. It will be set to `True` by default. This behavior will be depracted in transformers v4.45, and will be then set to `False` by default. For more details check this issue: https://github.com/huggingface/transformers/issues/31884
+  warnings.warn(
+/usr/local/lib/python3.10/dist-packages/transformers/convert_slow_tokenizer.py:551: UserWarning: The sentencepiece tokenizer that you are converting to a fast tokenizer uses the byte fallback option which is not implemented in the fast tokenizers. In practice this means that the fast version of the tokenizer can produce unknown tokens whereas the sentencepiece version would have converted these unknown tokens into a sequence of byte tokens matching the original piece of text.
+  warnings.warn(
+tokenized. pad_id=0 mean_len=72.9 p95=96
+fold0 ep0 loss=1.3186 valF1=0.6504 (657s)
+fold0 ep1 loss=1.0148 valF1=0.6959 (1248s)
+fold0 ep2 loss=0.9262 valF1=0.7100 (1832s)
+fold0 BEST valF1=0.7100 @ep2
+fold1 ep0 loss=1.3148 valF1=0.6515 (2421s)
+fold1 ep1 loss=1.0110 valF1=0.6894 (2995s)
+fold1 ep2 loss=0.9228 valF1=0.7133 (3558s)
+fold1 BEST valF1=0.7133 @ep2
+fold2 ep0 loss=1.3146 valF1=0.6522 (4126s)
+fold2 ep1 loss=1.0069 valF1=0.6988 (4581s)
+fold2 ep2 loss=0.9196 valF1=0.7134 (5031s)
+fold2 BEST valF1=0.7134 @ep2
+fold3 ep0 loss=1.3162 valF1=0.6400 (5493s)
+fold3 ep1 loss=1.0095 valF1=0.6804 (5995s)
+fold3 ep2 loss=0.9214 valF1=0.7103 (6664s)
+fold3 BEST valF1=0.7103 @ep2
+fold4 ep0 loss=1.3223 valF1=0.6518 (7339s)
+fold4 ep1 loss=1.0125 valF1=0.6941 (8010s)
+fold4 ep2 loss=0.9215 valF1=0.7138 (8670s)
+fold4 BEST valF1=0.7138 @ep2
+
+CV(best-epoch per fold) mean=0.7122+/-0.0016
+OOF raw Macro-F1 = 0.7123
+OOF calibrated Macro-F1 = 0.7200
+calib multipliers = [1.4500000476837158, 1.2999999523162842, 0.75, 0.8999999761581421, 3.0, 0.20000000298023224, 0.8500000238418579, 1.350000023841858, 1.2000000476837158, 1.0, 1.149999976158142, 1.149999976158142, 0.75, 1.0]
+per-class F1 (cal): {"read_file": 0.5464, "grep_search": 0.5849, "list_directory": 0.4623, "glob_pattern": 0.6203, "edit_file": 0.9538, "write_file": 0.9679, "apply_patch": 0.9213, "run_bash": 0.7912, "run_tests": 0.7753, "lint_or_typecheck": 0.6236, "ask_user": 0.5956, "plan_task": 0.6434, "web_search": 0.5949, "respond_only": 0.999}
+OOF corr with exp_010_pca_engineered_lgbm = 0.8762
+
+full-train final model ...
+full ep0 loss=1.2777 (9494s)
+full ep1 loss=0.9891 (10292s)
+full ep2 loss=0.9085 (11079s)
+
+DONE oof_raw=0.7123 oof_cal=0.7200 infer=1.67ms/sample model=552MB peak_mem=7583MB corr=0.8762250641495999

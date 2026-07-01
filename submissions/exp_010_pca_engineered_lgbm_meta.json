@@ -1,0 +1,11 @@
+{
+  "experiment_id": "exp_010_pca_engineered_lgbm",
+  "cv_score": null,
+  "inference_ms_per_sample": null,
+  "model_size_mb": 442.82,
+  "git_commit": "34697b2",
+  "sha256": "454bf36bfad36a7bf575196f7cc9f7f20a5cb10fe25a9167711ea17f8f78bd5b",
+  "created_at": "2026-07-01T09:00:36.810584",
+  "zip_size_mb": 185.33,
+  "offline_verified": true
+}

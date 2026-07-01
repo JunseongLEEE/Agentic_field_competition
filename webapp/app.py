@@ -33,6 +33,7 @@ INSIGHTS_PATH = ROOT / "logs" / "insights.jsonl"
 SUBMISSIONS_DIR = ROOT / "submissions"
 EXPERIMENTS_DIR = ROOT / "experiments"
 BACKUP_DIR = ROOT / "logs" / "backups"
+EXPLOG_PATH = ROOT / "EXPERIMENT_LOG.csv"
 KST = timezone(timedelta(hours=9))
 
 st.set_page_config(
@@ -245,12 +246,57 @@ def rebuild_digest() -> bool:
         return False
 
 
+def append_experiment_log(
+    exp_id: str,
+    lb_score: float | None,
+    cv_score: float | None,
+    status: str,
+    notes: str = "",
+) -> None:
+    """Append one row to EXPERIMENT_LOG.csv."""
+    now_kst = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+    cv_lb_gap = ""
+    if cv_score is not None and lb_score is not None and lb_score > 0:
+        cv_lb_gap = f"{cv_score - lb_score:.4f}"
+    row = {
+        "experiment_id": exp_id,
+        "name": exp_id,
+        "hypothesis": "",
+        "status": status,
+        "cv_score": f"{cv_score:.4f}" if cv_score is not None else "",
+        "cv_std": "",
+        "lb_score": f"{lb_score:.4f}" if lb_score is not None else "",
+        "cv_lb_gap": cv_lb_gap,
+        "seed": "",
+        "git_commit": "",
+        "created_at": now_kst,
+        "completed_at": now_kst,
+        "notes": notes,
+    }
+    df_new = pd.DataFrame([row])
+    header = not EXPLOG_PATH.exists() or EXPLOG_PATH.stat().st_size == 0
+    if EXPLOG_PATH.exists():
+        existing = pd.read_csv(EXPLOG_PATH)
+        if len(existing) > 0:
+            header = False
+    df_new.to_csv(EXPLOG_PATH, mode="a", header=header, index=False)
+
+
+@st.cache_data(ttl=5)
+def load_experiment_log() -> pd.DataFrame:
+    if not EXPLOG_PATH.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(EXPLOG_PATH)
+    return df if len(df) > 0 else pd.DataFrame()
+
+
 def clear_caches() -> None:
     load_meta.clear()
     load_state.clear()
     load_insights.clear()
     list_packaged_experiments.clear()
     list_all_experiments.clear()
+    load_experiment_log.clear()
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -314,117 +360,115 @@ st.markdown("---")
 # ─────────────────────────────────────────────────────────────────────
 st.header("📤 Record DACON Submission")
 
-# Source list: packaged first, then all experiments as fallback
 packaged = list_packaged_experiments()
 all_exps = list_all_experiments()
 exp_options = packaged or all_exps
 
-if not exp_options:
-    st.warning("No experiments found. Run `/dev` and `/pack` first.")
-else:
-    col_form, col_preview = st.columns([1, 1])
+col_form, col_preview = st.columns([1, 1])
 
-    with col_form:
-        exp_choice = st.selectbox(
-            "Experiment",
-            options=exp_options,
-            help="Packaged experiments listed first" if packaged else "No packaged zips — showing all experiments",
+with col_form:
+    if exp_options:
+        input_mode = st.radio(
+            "Experiment input",
+            ["Select existing", "Type manually"],
+            horizontal=True,
         )
+        if input_mode == "Select existing":
+            exp_choice = st.selectbox(
+                "Experiment",
+                options=exp_options,
+                help="Packaged experiments listed first" if packaged else "All experiments",
+            )
+        else:
+            exp_choice = st.text_input("Experiment ID", placeholder="exp_001_baseline_lgbm")
+    else:
+        exp_choice = st.text_input("Experiment ID", placeholder="exp_001_baseline_lgbm")
 
-        # Show meta preview
+    lb_input = st.number_input(
+        "LB Score",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.0,
+        step=0.0001,
+        format="%.4f",
+        help="Macro-F1 score from DACON leaderboard",
+    )
+
+    status_choice = st.radio(
+        "Status",
+        options=["success", "runtime_error", "install_error"],
+        horizontal=True,
+        help=(
+            "success: scored on LB | "
+            "runtime_error: counts against quota, lb=0 | "
+            "install_error: does NOT count against quota"
+        ),
+    )
+
+    notes_input = st.text_input("Notes (optional)", placeholder="e.g. added feature X")
+
+    # Duplicate check
+    existing_log = meta.get("submissions_log") or []
+    if exp_choice and any(e.get("experiment") == exp_choice for e in existing_log):
+        st.warning(f"'{exp_choice}' already has a submission record")
+
+    submit_btn = st.button("Record Submission", type="primary", use_container_width=True)
+
+    if submit_btn:
+        if not exp_choice or not exp_choice.strip():
+            st.error("Experiment ID is required")
+        elif status_choice == "success" and lb_input <= 0:
+            st.error("Success status requires LB > 0")
+        else:
+            exp_choice = exp_choice.strip()
+            lb_value = lb_input if status_choice == "success" else (0.0 if status_choice == "runtime_error" else None)
+
+            # 1) Append to EXPERIMENT_LOG.csv
+            append_experiment_log(
+                exp_id=exp_choice,
+                lb_score=lb_value,
+                cv_score=None,
+                status=status_choice,
+                notes=notes_input,
+            )
+
+            # 2) Also update competition_meta.yaml via track_submission
+            backup_path = backup_meta()
+            ok, output = run_track_submission(exp_choice, lb_value, status_choice)
+
+            if ok:
+                st.success(f"Recorded `{exp_choice}` | status={status_choice} | LB={lb_value}")
+                new_cvlb = refit_correlation()
+                rebuild_digest()
+                if new_cvlb and new_cvlb.get("n_pairs", 0) > 0:
+                    st.info(
+                        f"Correlation: n={new_cvlb.get('n_pairs')} | "
+                        f"r={new_cvlb.get('pearson_r')} | "
+                        f"trust={new_cvlb.get('trust_level')}"
+                    )
+                clear_caches()
+            else:
+                # track_submission failed but CSV was still written
+                st.warning(f"CSV recorded, but meta update failed: {output}")
+                clear_caches()
+
+with col_preview:
+    st.subheader("EXPERIMENT_LOG.csv")
+    exp_log_df = load_experiment_log()
+    if len(exp_log_df) > 0:
+        show_cols = [c for c in ["experiment_id", "status", "cv_score", "lb_score", "cv_lb_gap", "notes", "created_at"] if c in exp_log_df.columns]
+        st.dataframe(exp_log_df[show_cols].iloc[::-1], use_container_width=True, hide_index=True)
+    else:
+        st.caption("No records yet — submit your first result!")
+
+    # Show experiment meta preview if available
+    if exp_choice and exp_options and exp_choice in (packaged + all_exps):
         em = load_experiment_meta(exp_choice)
         cv_mean = (em.get("train_log") or {}).get("cv_mean")
-        cv_std = (em.get("train_log") or {}).get("cv_std")
-
-        lb_input = st.number_input(
-            "LB Score",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.0,
-            step=0.0001,
-            format="%.4f",
-            help="Macro-F1 score from DACON leaderboard",
-        )
-
-        status_choice = st.radio(
-            "Status",
-            options=["success", "runtime_error", "install_error"],
-            horizontal=True,
-            help=(
-                "success: scored on LB | "
-                "runtime_error: counts against quota, lb=0 | "
-                "install_error: does NOT count against quota"
-            ),
-        )
-
-        # Confirm duplicates
-        existing_log = meta.get("submissions_log") or []
-        duplicate = any(e.get("experiment") == exp_choice for e in existing_log)
-        if duplicate:
-            st.warning(f"⚠️ '{exp_choice}' already has a submission record")
-
-        submit_btn = st.button("Record & Refit Correlation", type="primary", use_container_width=True)
-
-        if submit_btn:
-            # Validation
-            if status_choice == "success" and lb_input <= 0:
-                st.error("Success status requires LB > 0")
-            else:
-                # Backup before write
-                backup_path = backup_meta()
-                lb_value = lb_input if status_choice == "success" else (0.0 if status_choice == "runtime_error" else None)
-                ok, output = run_track_submission(exp_choice, lb_value, status_choice)
-                if ok:
-                    st.success(f"✓ Recorded `{exp_choice}` | status={status_choice} | LB={lb_value}")
-                    st.code(output, language="text")
-                    # Refit + rebuild digest
-                    new_cvlb = refit_correlation()
-                    rebuild_digest()
-                    if new_cvlb:
-                        st.info(
-                            f"New correlation: n={new_cvlb.get('n_pairs')} | "
-                            f"r={new_cvlb.get('pearson_r')} | "
-                            f"trust={new_cvlb.get('trust_level')}"
-                        )
-                    st.caption(f"Backup saved to: `{backup_path.relative_to(ROOT)}`")
-                    clear_caches()
-                else:
-                    st.error("Failed to record submission")
-                    st.code(output, language="text")
-
-    with col_preview:
-        st.subheader("Preview")
         if cv_mean is not None:
-            st.write(f"**CV Macro-F1**: {cv_mean:.4f}" + (f" ± {cv_std:.4f}" if cv_std else ""))
-            # Predict LB
-            pred = predict_lb_for_cv(cv_mean)
-            if pred:
-                predicted = pred.get("predicted_lb")
-                pi_low = pred.get("pi_low")
-                pi_high = pred.get("pi_high")
-                trust = pred.get("trust_level", "low")
-                if predicted is not None:
-                    st.write(f"**Predicted LB**: {predicted:.4f}")
-                    if pi_low is not None and pi_high is not None:
-                        st.write(f"**95% PI**: [{pi_low:.4f}, {pi_high:.4f}]")
-                    st.write(f"**Trust**: {trust}")
-                    # Quick comparison if LB entered
-                    if lb_input > 0:
-                        gap = cv_mean - lb_input
-                        inside_pi = (pi_low or 0) <= lb_input <= (pi_high or 1)
-                        st.write(f"**CV-LB gap**: {gap:+.4f}")
-                        st.write(f"**Inside PI?**: {'✓ yes' if inside_pi else '✗ no'}")
-        else:
-            st.caption("No CV info found for this experiment.")
-
-        # Evaluation snapshot
-        ev = em.get("evaluation")
-        if ev:
             st.markdown("---")
-            st.caption(f"**Recommendation**: {ev.get('recommendation', '?')}")
-            collapsed = ev.get("per_class_summary", {}).get("collapsed_classes", [])
-            if collapsed:
-                st.caption(f"⚠️ Collapsed classes: {collapsed}")
+            cv_std_val = (em.get("train_log") or {}).get("cv_std")
+            st.write(f"**CV Macro-F1**: {cv_mean:.4f}" + (f" +/- {cv_std_val:.4f}" if cv_std_val else ""))
 
 st.markdown("---")
 

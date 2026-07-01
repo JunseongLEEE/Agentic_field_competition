@@ -1,8 +1,8 @@
 {
-  "last_updated": null,
+  "last_updated": "2026-07-01T16:58:24.964588+09:00",
   "current_phase": "baseline",
-  "best_cv": 0.0,
-  "best_experiment": null,
+  "best_cv": 0.6605357442960583,
+  "best_experiment": "exp_001_tfidf_lightgbm",
   "stall_counter": 0,
   "total_cycles": 0,
   "max_cycles": 20,
@@ -11,8 +11,109 @@
   "active_experiments": [],
   "blocked_approaches": [],
   "recent_context_window": 5,
-  "last_reasoning": "",
-  "competition_metric": null,
+  "last_reasoning": "Trust GroupKFold CV to select models. Next: stronger candidates (encoder fine-tune exp_009 clean re-run, GBDT+char/ensemble); submit only CV-improving ones.",
+  "competition_metric": "macro_f1",
   "data_shape": null,
-  "num_classes": 14
+  "num_classes": 14,
+  "model_family_roster": [
+    {
+      "family": "tfidf_lightgbm",
+      "tier": "baseline",
+      "cost_min": 8,
+      "priority": 1.0
+    },
+    {
+      "family": "tfidf_logreg",
+      "tier": "baseline",
+      "cost_min": 3,
+      "priority": 0.9
+    },
+    {
+      "family": "tfidf_catboost",
+      "tier": "baseline",
+      "cost_min": 10,
+      "priority": 0.8
+    },
+    {
+      "family": "st_minilm_lgb",
+      "tier": "embedding",
+      "cost_min": 15,
+      "priority": 0.85
+    },
+    {
+      "family": "st_mpnet_lgb",
+      "tier": "embedding",
+      "cost_min": 20,
+      "priority": 0.8
+    },
+    {
+      "family": "codebert_base",
+      "tier": "transformer",
+      "cost_min": 40,
+      "priority": 1.0
+    },
+    {
+      "family": "graphcodebert_base",
+      "tier": "transformer",
+      "cost_min": 45,
+      "priority": 0.95
+    },
+    {
+      "family": "deberta_v3_small",
+      "tier": "transformer",
+      "cost_min": 35,
+      "priority": 0.95
+    },
+    {
+      "family": "deberta_v3_base",
+      "tier": "transformer",
+      "cost_min": 50,
+      "priority": 0.9
+    },
+    {
+      "family": "electra_small",
+      "tier": "transformer",
+      "cost_min": 25,
+      "priority": 0.7
+    },
+    {
+      "family": "xlm_roberta_base",
+      "tier": "transformer",
+      "cost_min": 45,
+      "priority": 0.7,
+      "condition": "korean_text_detected"
+    },
+    {
+      "family": "qwen25_05b_cls_head",
+      "tier": "llm",
+      "cost_min": 60,
+      "priority": 0.6
+    },
+    {
+      "family": "phi3_mini_lora",
+      "tier": "llm",
+      "cost_min": 75,
+      "priority": 0.5
+    },
+    {
+      "family": "top3_blend",
+      "tier": "ensemble",
+      "cost_min": 10,
+      "priority": 1.0,
+      "condition": ">=3 candidates exist"
+    }
+  ],
+  "family_stats": {
+    "tfidf_lightgbm": {
+      "tried": 1,
+      "best_cv": 0.6605357442960583,
+      "best_exp": "exp_001_tfidf_lightgbm",
+      "avg_lb_gap": -0.01475910500394173,
+      "status": "leader"
+    }
+  },
+  "current_tier": "baseline",
+  "best_lb": 0.6752948493,
+  "best_lb_experiment": "exp_001_tfidf_lightgbm",
+  "best_family": "tfidf_lightgbm"
 }

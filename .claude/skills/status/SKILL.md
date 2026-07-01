@@ -70,7 +70,7 @@ NEXT: /<skill> [args]   ← <one sentence why>
 ### 7. Warnings
 
 Flag in red (text only — no color codes):
-- `submissions_today >= 9` → "quota almost exhausted"
+- `submissions_today >= 18` → "quota almost exhausted" (team quota is 20/day)
 - `days_to_preliminary <= 2` → "deadline imminent — freeze new architectures"
 - `cv_lb_trust == 'low' and submissions_count >= 3` → "submissions aren't improving the correlation model; collect more diverse picks"
 - `best_lb is null and submissions_today >= 1` → "submitted but no LB recorded — run /submit-result"
@@ -82,7 +82,7 @@ Flag in red (text only — no color codes):
 COMPETITION DASHBOARD — <YYYY-MM-DD HH:MM KST>
 ═════════════════════════════════════════════
 Deadline       : preliminary 2026-07-15  → D-<N>
-Daily quota    : <used>/10  remaining=<R>
+Daily quota    : <used>/20  remaining=<R>
 
 Best CV        : 0.XXXX (exp_NNN)
 Best LB        : 0.XXXX (exp_NNN)

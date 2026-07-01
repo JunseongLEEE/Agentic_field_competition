@@ -1,0 +1,39 @@
+{
+  "experiment_id": "exp_004_codebert",
+  "metric": "macro_f1",
+  "cv_strategy": "StratifiedGroupKFold(5, group=session, seed=42)",
+  "cv_fold_scores": [
+    0.6311755710806489,
+    0.6226348241830826,
+    0.6179406758155512,
+    0.6212903578439825,
+    0.6233592008658354
+  ],
+  "cv_mean": 0.6232801259578201,
+  "cv_std": 0.004364163742981661,
+  "per_class_f1": {
+    "read_file": 0.4831322837865467,
+    "grep_search": 0.5339762830290804,
+    "list_directory": 0.36390600045630844,
+    "glob_pattern": 0.5571205007824727,
+    "edit_file": 0.8609248454236698,
+    "write_file": 0.920043026174256,
+    "apply_patch": 0.7888599787992676,
+    "run_bash": 0.7122981618767137,
+    "run_tests": 0.6827165685449958,
+    "lint_or_typecheck": 0.46847316310578424,
+    "ask_user": 0.508758271701051,
+    "plan_task": 0.5299672383888996,
+    "web_search": 0.3255051884216275,
+    "respond_only": 0.9915328467153285
+  },
+  "worst_class": "web_search",
+  "best_class": "respond_only",
+  "collapsed_classes": [],
+  "runtime_seconds_train": 2037.0,
+  "n_features": 804,
+  "seed": 42,
+  "embed_dim": 768,
+  "encoder_hf_id": "microsoft/codebert-base",
+  "encoder_disk_size_mb": 953.6
+}

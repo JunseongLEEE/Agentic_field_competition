@@ -93,11 +93,24 @@ def package(exp_path: Path):
         # Add requirements.txt
         zf.write(req_path, "requirements.txt")
 
+        # Add helper modules script.py may import (must live at zip root next to script.py)
+        for extra in ("features.py", "model.py"):
+            p = exp_path / extra
+            if p.exists():
+                zf.write(p, extra)
+
         # Add model/ directory
         for model_file in sorted(model_dir.rglob("*")):
             if model_file.is_file():
                 arcname = str(model_file.relative_to(exp_path))
                 zf.write(model_file, arcname)
+
+    # Enforce 1GB DACON hard cap
+    zip_mb = zip_path.stat().st_size / (1024 * 1024)
+    if zip_mb > 1024:
+        zip_path.unlink()
+        print(f"PACKAGING FAILED: zip {zip_mb:.0f} MB exceeds 1 GB cap")
+        sys.exit(2)
 
     # Hash
     sha256 = hashlib.sha256(zip_path.read_bytes()).hexdigest()

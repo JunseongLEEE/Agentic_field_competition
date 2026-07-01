@@ -1,0 +1,46 @@
+experiment:
+  id: exp_009_deberta_v3_small_ft
+  hypothesis: >
+    Full fine-tuning of microsoft/deberta-v3-small with structured/sequential
+    features (last_action, turn_index, tier, ci, etc.) serialized into the input
+    text will beat the tfidf-GBDT leader (GroupKFold CV ~0.674). Frozen embeddings
+    only reached ~0.62-0.635, so the structured signal must flow through the encoder.
+  expected_macro_f1: 0.67
+  verification_protocol:
+    accept_if: "StratifiedGroupKFold cv_mean > 0.674 and no collapsed classes"
+    reject_if: "cv_mean < 0.64 or any minority class collapses (F1 < 0.05)"
+  created: 2026-07-01
+  git_commit: null
+
+data:
+  train_path: ../../data/train.jsonl
+  train_labels_path: ../../data/train_labels.csv
+  test_path: ../../data/test.jsonl
+  sample_submission_path: ../../data/sample_submission.csv
+  id_col: id
+  target_col: action
+
+cv:
+  n_splits: 5
+  strategy: stratified_group_kfold   # group = id.rsplit("-step",1)[0]
+  seed: 42
+
+model:
+  type: deberta_v3_small_ft
+  base: microsoft/deberta-v3-small
+  num_class: 14
+
+train:
+  max_length: 160
+  batch_size: 32
+  epochs: 3
+  lr: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.06
+  precision: bf16          # training autocast; weights saved fp16
+  class_weight: balanced   # weighted CE for Macro-F1
+
+output:
+  oof_predictions: oof_preds.npy
+  weights_dir: model/
+  log_file: train_log.json

@@ -1,0 +1,38 @@
+{
+  "experiment_id": "exp_001_tfidf_lightgbm",
+  "metric": "macro_f1",
+  "cv_strategy": "StratifiedGroupKFold(3,group=session,seed=42)",
+  "cv_fold_scores": [
+    0.661341060165684,
+    0.6547460843719817,
+    0.6655200883505094
+  ],
+  "cv_mean": 0.6605357442960583,
+  "cv_std": 0.004435176860038821,
+  "per_class_f1": {
+    "read_file": 0.49536610481816706,
+    "grep_search": 0.551685162351007,
+    "list_directory": 0.37865712481582825,
+    "glob_pattern": 0.5575168583895279,
+    "edit_file": 0.9061308696237161,
+    "write_file": 0.9716216216216216,
+    "apply_patch": 0.8424995071949537,
+    "run_bash": 0.719018890317476,
+    "run_tests": 0.6857082852042423,
+    "lint_or_typecheck": 0.5040189125295508,
+    "ask_user": 0.5606818602927552,
+    "plan_task": 0.5831452219714071,
+    "web_search": 0.49542124542124544,
+    "respond_only": 0.9968069666182874
+  },
+  "worst_class": "list_directory",
+  "collapsed_classes": [],
+  "inference_ms_per_sample": 0.249,
+  "estimated_full_test_minutes": 0.12,
+  "model_size_mb": 34.6,
+  "n_features": 20036,
+  "offline_compatible": true,
+  "seed": 42,
+  "git_commit": "local",
+  "note": "word tfidf(1,2)+structured; char_wb dropped for speed"
+}

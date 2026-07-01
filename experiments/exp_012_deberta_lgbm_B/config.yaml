@@ -1,0 +1,30 @@
+experiment_id: exp_012_deberta_lgbm_B
+description: >
+  2-Stage: DeBERTa-v3-small(prompt only) → 14-class soft-intent
+  → LightGBM with 7 structural features (MI≥0.18 only).
+  Comparison: no last_action prefix → DeBERTa sees text only.
+
+hypothesis: >
+  Without last_action prefix, DeBERTa learns pure text intent.
+  May generalize better to OOD test if last_action distribution shifts.
+  Expected CV Macro-F1 slightly lower than Exp A but more robust.
+
+stage1:
+  model: microsoft/deberta-v3-small
+  input: "current_prompt (no prefix)"
+  max_length: 128
+  epochs: 5
+  batch_size: 64
+  lr: 2e-5
+
+stage2:
+  model: lightgbm
+  features: same 7 as exp_011 + 14 deberta probs
+
+cv:
+  strategy: StratifiedGroupKFold
+  n_splits: 5
+  group: session_id
+  seed: 42
+
+seed: 42

@@ -1,0 +1,3 @@
+[focal] Building features...
+[focal] Features: (70000, 25078), dense: 78 (52s)
+[focal] Fold 0: train=55716, val=14284

@@ -1,0 +1,11 @@
+{
+  "experiment_id": "exp_014_mmf_fusion",
+  "cv_score": 0.7121722488589437,
+  "inference_ms_per_sample": 1.675,
+  "model_size_mb": 551.94,
+  "git_commit": "34697b2",
+  "sha256": "7d330e3edecf69b54921045827761a807fd7cbdd5f350b9ec47e805ccdb40254",
+  "created_at": "2026-07-01T12:19:03.162528",
+  "zip_size_mb": 496.56,
+  "offline_verified": true
+}

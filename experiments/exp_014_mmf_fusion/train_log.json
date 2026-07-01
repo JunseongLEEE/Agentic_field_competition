@@ -1,0 +1,52 @@
+{
+  "experiment_id": "exp_014_mmf_fusion",
+  "metric": "macro_f1",
+  "cv_strategy": "StratifiedGroupKFold(5,group=session,seed=42)",
+  "cv_fold_scores": [
+    0.7100207758097227,
+    0.7133258565902475,
+    0.7134154339733826,
+    0.7103248985716567,
+    0.7137742793497093
+  ],
+  "cv_mean": 0.7121722488589437,
+  "cv_std": 0.0016422156426786757,
+  "cv_mean_calibrated": 0.7199822245982063,
+  "oof_raw_macro_f1": 0.7122840170952124,
+  "per_class_f1": {
+    "read_file": 0.5464045782532968,
+    "grep_search": 0.5848751156336726,
+    "list_directory": 0.4623208506703652,
+    "glob_pattern": 0.6202739726027398,
+    "edit_file": 0.9537546600390555,
+    "write_file": 0.9678510998307953,
+    "apply_patch": 0.9213483146067416,
+    "run_bash": 0.7912287793047696,
+    "run_tests": 0.7752626448608253,
+    "lint_or_typecheck": 0.6235919234856535,
+    "ask_user": 0.5955520566817556,
+    "plan_task": 0.6433958954569374,
+    "web_search": 0.5948565039135296,
+    "respond_only": 0.999034749034749
+  },
+  "worst_class": "list_directory",
+  "collapsed_classes": [],
+  "oof_corr_gbdt": 0.8762250641495999,
+  "oof_corr_source": "exp_010_pca_engineered_lgbm",
+  "best_epochs_per_fold": [
+    3,
+    3,
+    3,
+    3,
+    3
+  ],
+  "full_train_epochs": 3,
+  "inference_ms_per_sample": 1.675,
+  "estimated_full_test_minutes": 0.84,
+  "estimated_full_test_minutes_t4": 2.09,
+  "gpu_peak_mem_mb": 7582.9,
+  "model_size_mb": 551.9,
+  "offline_compatible": true,
+  "seed": 42,
+  "encoder_id": "microsoft/mdeberta-v3-base"
+}

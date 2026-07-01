@@ -1,0 +1,11 @@
+{
+  "experiment_id": "exp_001_tfidf_lightgbm",
+  "cv_score": 0.6605357442960583,
+  "inference_ms_per_sample": 0.249,
+  "model_size_mb": 34.6,
+  "git_commit": "34697b2",
+  "sha256": "56d1a6f9fcd3efa948fffd3c49bffe04ee0b319acccb424f28067845ccd420d3",
+  "created_at": "2026-07-01T07:51:43.878131",
+  "zip_size_mb": 14.45,
+  "offline_verified": true
+}

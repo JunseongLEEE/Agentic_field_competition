@@ -84,7 +84,7 @@ Read `data_docs/` (all `.md` files). Read `wiki/lessons/` and `wiki/decisions/` 
 
 Print a situational summary:
 ```
-[TIME] now=<iso KST>  | D-<N> to preliminary  | quota=<used>/10  remaining=<R>
+[TIME] now=<iso KST>  | D-<N> to preliminary  | quota=<used>/20  remaining=<R>
 [STATE] phase=<X>  best_cv=<0.XXXX>(<exp>)  best_lb=<0.XXXX>(<exp>)  stall=<S>/5  cycles=<C>
 [CVLB] n_pairs=<k>  pearson_r=<r>  σ=<sigma>  trust=<level>
 [INSIGHTS] <last insight one-liner or "none yet">
@@ -199,13 +199,17 @@ Agent(
   Approach:
     model_family: <...>
     feature_set: <...>
-    cv: stratified_5fold
-  Data: data_docs/dataset_overview.md describes columns and 14-class target.
+    cv: stratified_group_5fold          # StratifiedGroupKFold, group = session id (id.rsplit("-step",1)[0])
+  Data: JSONL (data/train.jsonl + data/train_labels.csv join on id; data/test.jsonl).
+        data_docs/dataset_overview.md describes columns and the 14-class STRING target `action`.
 
   REQUIREMENTS:
-  - Produce experiments/exp_NNN_name/{config.yaml,train.py,script.py,requirements.txt,SUMMARY.md}
+  - Produce experiments/exp_NNN_name/{config.yaml,train.py,script.py,features.py,requirements.txt,SUMMARY.md}
+  - Load data via JSONL loaders (features.py load_jsonl/build_records); labels are 14 snake_case STRINGS, not ints
+  - CV = StratifiedGroupKFold(5, shuffle=True, random_state=42) grouped by session, with a zero group-overlap assert
+  - Thread cap (Rule B): set n_jobs/num_threads/thread_count ≤ 16 (128-core box → oversubscription thrash otherwise)
   - train.py writes train_log.json with cv_mean/cv_std/per_class_f1/collapsed_classes/inference_ms_per_sample/model_size_mb/offline_compatible
-  - script.py is OFFLINE-only, reads data/, writes output/submission.csv
+  - script.py is OFFLINE-only, reads data/test.jsonl, writes output/submission.csv with STRING `action` labels
   - Run scripts/validate_submission.py before returning
   - Do NOT execute train.py — runner will
 
@@ -218,7 +222,16 @@ Agent(
 
 ### 3a — RUN
 
+**Rule A (foreground/wait):** the orchestrator runs `train.py` in the FOREGROUND
+and BLOCKS until it exits. NEVER background the training and move on — a
+background-and-exit leaves orphaned trainings and skips downstream steps
+(eval, pack). The cycle is only "run" once `train_log.json` + `oof_preds.npy` +
+`test_preds.npy` actually exist on disk. **Rule B (thread cap):** cap CPU threads
+≤ 16 (128-core box → oversubscription thrash) and run at most 2 heavy trainings
+in parallel, never a full-core fan-out.
+
 ```bash
+# FOREGROUND — wait for completion (do NOT append & / do NOT run_in_background)
 cd experiments/exp_NNN_name && timeout 3600 python train.py 2>&1 | tee run_output.txt
 ```
 

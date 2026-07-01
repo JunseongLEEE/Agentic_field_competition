@@ -1,0 +1,6 @@
+Loading train from /root/Agentic_fold0 macroF1=0.6613 (362s)
+fold1 macroF1=0.6547 (637s)
+fold2 macroF1=0.6655 (934s)
+CV macroF1 = 0.6605 +/- 0.0044
+full-train ...
+DONE {"cv_mean": 0.6605357442960583, "cv_std": 0.004435176860038821, "worst_class": "list_directory", "estimated_full_test_minutes": 0.12, "model_size_mb": 34.6}
