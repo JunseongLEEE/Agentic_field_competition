@@ -1,0 +1,6 @@
+# ABI-safe pins. torch is preinstalled on the DACON GPU server — do NOT pin (huge).
+# numpy / scipy / pandas: rely on server defaults (pinning caused ABI errors before).
+transformers==4.44.2
+sentencepiece
+scikit-learn==1.5.1
+lightgbm==4.6.0

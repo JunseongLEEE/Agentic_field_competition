@@ -1,0 +1,11 @@
+{
+  "experiment_id": "exp_016_ensemble",
+  "cv_score": null,
+  "inference_ms_per_sample": null,
+  "model_size_mb": 1029.37,
+  "git_commit": "7d7c6c2",
+  "sha256": "bef5554622baf7a67bcbeb9c842bddbae0fca3033a06a52ac04f1021a4ad7762",
+  "created_at": "2026-07-01T13:10:53.822890",
+  "zip_size_mb": 696.32,
+  "offline_verified": true
+}

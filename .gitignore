@@ -10,6 +10,10 @@ experiments/*/models/
 experiments/*/model/
 experiments/*/*.npy
 
+# Experiment data/output (symlinks or generated)
+experiments/*/data
+experiments/*/output/
+
 # Wiki sessions (auto-generated, can be large)
 wiki/sessions/
 

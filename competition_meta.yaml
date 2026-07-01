@@ -52,3 +52,10 @@ submissions_log:
   lb_score: 0.6870832107
   status: success
   counts_against_daily: true
+- date: '2026-07-01'
+  timestamp: '2026-07-01T21:55:28.258886+09:00'
+  experiment: exp_014_mmf_fusion
+  cv_score: 0.7121722488589437
+  lb_score: 0.7114484207
+  status: success
+  counts_against_daily: true

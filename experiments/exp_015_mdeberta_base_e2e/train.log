@@ -11,3 +11,6 @@ CV: StratifiedGroupKFold
 ============================================================
 
 --- Fold 0 (train=55716, val=14284) ---
+  fold0 epoch0 loss=0.6155 val_macroF1=0.5386
+  fold0 epoch1 loss=0.2703 val_macroF1=0.6080
+  fold0 epoch2 loss=0.2169 val_macroF1=0.6370

@@ -12,7 +12,7 @@ hypothesis: >
 
 model:
   name: microsoft/mdeberta-v3-base
-  max_length: 384
+  max_length: 224
   n_classes: 14
   dropout: 0.1
 
@@ -45,7 +45,7 @@ data:
   train_labels_path: ../../data/train_labels.csv
   test_path: ../../data/test.jsonl
   user_content_max: 80
-  history_window: 8
+  history_window: 4
   arg_hint_max: 40
 
 seed: 42
