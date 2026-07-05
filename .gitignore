@@ -1,0 +1,27 @@
+# ── 보안: 자격증명 절대 커밋 금지 ──
+.env
+
+# ── 대회 데이터: 재배포 금지 규정 ──
+competition_data/
+original_data/
+captions.zip
+data/
+*.arrow
+
+# ── 논문 PDF (저작권) ──
+paper/*.pdf
+
+# ── 대용량/파생 산출물 ──
+experiments/*/
+experiments/*.npz
+experiments/*.pt
+experiments/*.log
+experiments/preds_*
+*.safetensors
+test_synthetic_flag.csv
+
+# ── 기타 ──
+__pycache__/
+*.pyc
+.claude/
+nohup.out

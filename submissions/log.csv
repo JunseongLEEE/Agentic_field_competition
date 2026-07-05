@@ -1,0 +1,4 @@
+ts,exp,file,val_em,lb_public,gap
+2026-07-04T05:04:46+00:00,identity,sub_identity.csv,0.1551,0.15532,-0.0002
+2026-07-04T15:51:01+00:00,qwen_r16_ep1,sub_qwen_r16_ep1.csv,0.6333,0.65794,-0.0246
+2026-07-05T00:13:14+00:00,qwen_r16_idp_ep1,sub_qwen_idp_ep1.csv,0.6500,0.69284,-0.0428

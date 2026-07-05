@@ -1,0 +1,12 @@
+ts,exp,config,val_em,notes
+2026-07-04T05:04:46+00:00,identity,"always [1,2,3,4]",0.1551,LB 0.15532
+2026-07-04T05:04:46+00:00,track_b_v1,siglip2 frozen + pointer head,0.1415,"identity 이하, 탈락"
+2026-07-04T10:44:13+00:00,qwen_r16_ep0,"Qwen2.5-VL-7B LoRA r16 ep0/2, 24perm-score",0.6033,"val_clean 0.6066, n=300"
+2026-07-04T10:44:30+00:00,qwen_r16_ep1,"Qwen2.5-VL-7B LoRA r16 ep1/2, 24perm-score",0.6333,"val_clean 0.6324, n=300. ep0보다 우수 → test 추론 채택"
+2026-07-04T10:45:07+00:00,qwen_r16_ep1_gate,error analysis,0.6333,near-dup 오답 44.5% >= 40% 게이트 발동. Q4 EM 0.427. identity 과소예측(0.13 vs 0.17)
+2026-07-04T15:56:59+00:00,qwen_r16_ep1_LB,LB result,0.6333,"LB 0.65794, gap -0.0246 (LB>CV): 합성 샘플이 쉬운 구간, OOD 문제 없음"
+2026-07-04T21:39:15+00:00,qwen_r16_idp_ep1,"LoRA r16 + id_prior 0.155, 2ep",0.6500,val_clean 0.6507. 구 ep1 대비 +1.7pp
+2026-07-04T21:39:15+00:00,qwen_r16_idp_ep0,상동 1ep,0.5900,ep1 채택
+2026-07-04T21:39:38+00:00,idp_ep1_idbonus,identity logit bonus b=0.6,0.6467,"홀드아웃 -1.4pp, 채택 안 함 — id_prior 수정으로 캘리브레이션 이미 해결됨 (음성 결과)"
+2026-07-05T00:37:14+00:00,qwen_r16_idp_ep1_LB,LB result,0.6500,"LB 0.69284 (+3.5pp vs 구모델 0.65794), gap -4.3pp 일관"
+2026-07-05T02:03:10+00:00,idp_ep1_tta2,TTA 2-pass input order avg,0.8000,동일 150샘플 대조로 기본과 비교 — 최종 채택 여부는 대조 결과 기준
